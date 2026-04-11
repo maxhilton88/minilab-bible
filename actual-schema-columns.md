@@ -1123,6 +1123,7 @@ status (TEXT, default 'complete') — message processing state: pending → proc
 | reviewed_at | timestamptz | YES | | |
 | review_note | text | YES | | |
 | telegram_message_id | bigint | YES | | |
+| unit_id | uuid | YES | | FK→units — scope approvals per unit (Migration 080) |
 | expires_at | timestamptz | YES | | |
 | created_at | timestamptz | YES | now() | |
 | updated_at | timestamptz | YES | now() | |
@@ -2335,6 +2336,7 @@ Single source of truth for all material usage (migration 059 / D-0368). Stock = 
 | exit_time | timestamptz | YES | | |
 | logged_by | uuid | YES | | FK→users |
 | gate_id | uuid | YES | | FK→building_gates (D-0442) |
+| relationship | text | YES | NULL | owner/tenant/family — vehicle registrant relationship to unit (Migration 080) |
 | created_at | timestamptz | YES | now() | |
 
 ## §Table-vendor_building_contracts
@@ -2546,12 +2548,13 @@ title (TEXT NOT NULL),
 category (document_category: house_rules, bylaws, spa, strata_title, fire_cert, ccc, management_agreement, insurance, audit_report, agm_minutes, committee_minutes, circular, form, correspondence, legal, financial, other — DEFAULT 'other'),
 description (TEXT), file_url (TEXT NOT NULL), file_name (TEXT), file_size (INTEGER),
 uploaded_by (UUID FK→users),
+unit_id (UUID FK→units — nullable, NULL=building-wide, set=unit-specific — added Migration 080),
 expires_at (DATE), is_public (BOOLEAN NOT NULL DEFAULT false),
 tags (TEXT[]),
 created_at (TIMESTAMPTZ NOT NULL DEFAULT now()),
 updated_at (TIMESTAMPTZ NOT NULL DEFAULT now())
 ```
-**Indexes:** idx_building_docs_building (building_id), idx_building_docs_category (building_id, category), idx_building_docs_expiry (expires_at) WHERE expires_at IS NOT NULL
+**Indexes:** idx_building_docs_building (building_id), idx_building_docs_category (building_id, category), idx_building_docs_expiry (expires_at) WHERE expires_at IS NOT NULL, idx_building_documents_unit_id (unit_id) WHERE unit_id IS NOT NULL
 **RLS:** select=own_building, insert/update=bm+staff, delete=bm only
 
 ---
