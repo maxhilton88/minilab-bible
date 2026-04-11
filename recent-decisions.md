@@ -1,7 +1,7 @@
 # Recent Decisions — Minilab
 <!-- Anchored by feature area. Use: awk '/^## §Feature/,/^## §/' docs/startup/recent-decisions.md | head -n -1 -->
 <!-- List all anchors: grep '^## §' docs/startup/recent-decisions.md -->
-<!-- Last updated: 2026-04-11 (session: V30 ai-fallback dropdown fix — D-0593) -->
+<!-- Last updated: 2026-04-12 (session: V31 console contact badge eager load — D-0594) -->
 <!-- For full history: docs/startup/old/decisions.log -->
 
 ## §Face-Recognition
@@ -1140,6 +1140,7 @@ Additionally, the SW CACHE_NAME is `minilab-v2` — unchanged across all 7 fix a
 | D-0591 | 2026-04-11 | feat | Resume AI in console: clears ai_paused flag + closes open ai_handoff cases. Works for both unit and contact views. Handoff badge removed from left panel on resume. |
 | D-0592 | 2026-04-11 | fix | Nudge button case-aware messages. With active case: includes case #{number} ({title}) + CASE-{id} deep-link + "Do not reply". Without case: generic follow-up + "Do not reply". CenterTimeline passes first open case from unit details, selected case, or handoff case. Contacts API returns handoff_case_number + handoff_case_title. CasesClient passes caseNumber prop. |
 | D-0593 | 2026-04-11 | fix | AI fallback assignee dropdown empty — invalid enum values ('admin','building_manager') in user_roles query caused Postgres cast error; roles came back null so staff:[] was returned. Fixed by querying only valid user_role_type values ['bm','staff']. |
+| D-0594 | 2026-04-12 | fix | Console Contact tab badge lazy — unread count only appeared after clicking Contact tab. New GET /api/bm/console/contacts/unread-count (2 queries: sender_profiles.last_inbound_at vs console_read_state) fetched on mount. contactUnreadTotal state in page; LeftPanel badge falls back to it when contacts list is empty. |
 
 ## D-0436 — AI Console Fixes: Compose Bar + Slide-Over Modals + Thin Scrollbars (2026-04-09)
 
