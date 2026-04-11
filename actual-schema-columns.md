@@ -197,6 +197,7 @@ sla_due_at, resolved_at, created_at, updated_at
 ```
 **NOT present:** `reported_by` (correct name is `resident_id`), `case_number` is REQUIRED
 **Migration 079:** Added sender_profile_id (UUID FK → sender_profiles) — links handoff cases to unregistered contacts. Added 'ai_handoff' to case_category_type enum (D-0590).
+**Migration 081:** Added related_unit_id (UUID FK → units, indexed) — for interfloor leak cases linking affected/source unit. Added 'interfloor_leak' to case_category_type enum (D-0600).
 
 ## §Table-collection_accounts
 ### collection_accounts
@@ -1124,6 +1125,7 @@ status (TEXT, default 'complete') — message processing state: pending → proc
 | review_note | text | YES | | |
 | telegram_message_id | bigint | YES | | |
 | unit_id | uuid | YES | | FK→units — scope approvals per unit (Migration 080) |
+| sender_profile_id | uuid | YES | | FK→sender_profiles — links payment approvals to chat sender (Migration 081) |
 | expires_at | timestamptz | YES | | |
 | created_at | timestamptz | YES | now() | |
 | updated_at | timestamptz | YES | now() | |
