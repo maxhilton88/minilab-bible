@@ -151,6 +151,7 @@ Infra:
 7. GRAPH: If major architectural change → update docs/startup/GRAPH_REPORT.md.
 8. LIST files changed.
 9. COMMIT with prefix (feat: | fix: | docs: | refactor: | chore:) and push to main.
+10. SYNC BIBLE: cd docs/startup && git add -A && git commit -m "bible: sync V{XX}" && git push origin main && cd ../..
 
 ---
 
