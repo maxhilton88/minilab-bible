@@ -1,7 +1,7 @@
 # Recent Decisions — Minilab
 <!-- Anchored by feature area. Use: awk '/^## §Feature/,/^## §/' docs/startup/recent-decisions.md | head -n -1 -->
 <!-- List all anchors: grep '^## §' docs/startup/recent-decisions.md -->
-<!-- Last updated: 2026-04-11 (session: V29 nudge fix — D-0592) -->
+<!-- Last updated: 2026-04-11 (session: V30 ai-fallback dropdown fix — D-0593) -->
 <!-- For full history: docs/startup/old/decisions.log -->
 
 ## §Face-Recognition
@@ -1139,6 +1139,7 @@ Additionally, the SW CACHE_NAME is `minilab-v2` — unchanged across all 7 fix a
 | D-0580 | 2026-04-11 | fix | Console "No messages yet" for WA contacts: webhook inbound insert + storeOutboundMessage now set sender_profile_id. Root cause: contact-messages API queries by sender_profile_id but WA messages had it NULL. CHV messages backfilled. |
 | D-0591 | 2026-04-11 | feat | Resume AI in console: clears ai_paused flag + closes open ai_handoff cases. Works for both unit and contact views. Handoff badge removed from left panel on resume. |
 | D-0592 | 2026-04-11 | fix | Nudge button case-aware messages. With active case: includes case #{number} ({title}) + CASE-{id} deep-link + "Do not reply". Without case: generic follow-up + "Do not reply". CenterTimeline passes first open case from unit details, selected case, or handoff case. Contacts API returns handoff_case_number + handoff_case_title. CasesClient passes caseNumber prop. |
+| D-0593 | 2026-04-11 | fix | AI fallback assignee dropdown empty — invalid enum values ('admin','building_manager') in user_roles query caused Postgres cast error; roles came back null so staff:[] was returned. Fixed by querying only valid user_role_type values ['bm','staff']. |
 
 ## D-0436 — AI Console Fixes: Compose Bar + Slide-Over Modals + Thin Scrollbars (2026-04-09)
 
