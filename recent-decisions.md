@@ -36,6 +36,7 @@ Multi-session attendance (unlimited in/out pairs per day). Face IS identity — 
 | D-0347 | 2026-04-04 | fix | RPC bug: NULL user_id in 4 RPCs fixed (migration 058) |
 | D-0349 | 2026-04-04 | fix | /api/app/attendance rewritten from PostgREST to RPC; schema cache reloaded |
 | D-0350 | 2026-04-05 | fix | Attendance stale: supabaseAdmin fetch cache:'no-store' + Cache-Control headers |
+| D-0621 | 2026-04-12 | fix | PWA attendance history: absent days now shown — API generates absent_dates (working days in current month with no records, respects building_working_hours rest days, skips today); frontend merges absent groups into day list with red Absent badge; monthly summary uses actual absent groups instead of Mon-Fri estimate |
 | D-0373 | 2026-04-05 | feature | AI material probe: when case resolved, proactively ask assigned technician what materials they used via Telegram. DeepSeek parses natural-language reply (English/Malay/mixed), fuzzy-matches against procurement_items catalog, writes to job_materials. 3 resolution hooks (BM portal PATCH, PWA PATCH, Telegram photo-evidence handler). Redis probe state 24h TTL (material_probe:{userId}). Intercept in Telegram webhook before admin AI routing. No new tables/env vars. Fire-and-forget everywhere. |
 | D-0376 | 2026-04-06 | fix | Org portal attendance rate bug: both /api/security/attendance and /api/cleaning/attendance queried contractor_shifts.start_time (type: time) with ISO datetime strings — wrong column type. Fixed to use shift_date (type: date) with 'YYYY-MM-DD' strings. Affects attendance rate % displayed on attendance pages. |
 | D-0380 | 2026-04-06 | fix | Geofence settings merged into /bm/settings/profile — removed standalone /bm/settings/location page and its hub card. PWA clock page: new /api/app/geofence-status endpoint (building_id query param, no auth wall, returns geofence_active bool). Clock page fetches on mount; when geofence active + GPS denied, replaces scan button with prominent LocationBlockedBanner (red card, "Location required" heading + instructions). LocationChip hides itself in that state to avoid duplication. |
@@ -1784,6 +1785,23 @@ New portal at /committee (separate route group). Read-only governance views: col
 | D-0313 | 2026-04-02 | feature | Superadmin conversion funnel; collection QR+WhatsApp share; supplier bidding |
 | D-0314 | 2026-04-02 | feature | Chase engine dedup (last_reminder_at); org dunning cron; trial expiry cron; contract renewal |
 | D-0494 | 2026-04-10 | feat | Sidebar collection widget redesign: replaced AI/WA credit widget with per-building collection balance summary. Shows collection rate % ring chart, total outstanding (RM), overdue/total units. GET /api/bm/collection/summary. Dark gradient glassmorphism (#1a1a2e→#16213e→#0f0f1a). |
+| D-0625 | 2026-04-12 | feat | Collection blocking amount threshold + MOA status badges + Stage 5 vehicle dispatch. See detail below. |
+
+### D-0625 — Collection blocking threshold, Stage 5 MOA dispatch, MOA status badges
+**Date:** 2026-04-12
+**Context:** Three fixes to the collection enforcement pipeline: (1) BMs need to exclude low-balance accounts from hardware blocking (petty debt shouldn't cut access cards), (2) Stage 5 had no MOA dispatch despite being the "Block Vehicle" stage, (3) the pipeline UI still showed legacy "Requires OpenClaw" badges instead of live MOA connection status.
+**Decision:**
+1. **Migration 087:** `ALTER TABLE collection_settings ADD COLUMN IF NOT EXISTS block_minimum_amount NUMERIC DEFAULT 0`. Default 0 preserves existing behaviour (block at any amount).
+2. **Collection engine threshold:** Before applying Stage 4/5 blocks, engine fetches `block_minimum_amount` from `collection_settings` per building (batch pre-fetched before loop). If `balance < blockMin` and `blockMin > 0`, sets `access_blocked: false` / skips dispatch but still advances the escalation stage and sends WhatsApp notification.
+3. **Stage 4 vs Stage 5 split dispatch:**
+   - Stage 4 (6 months) → `dispatchAccessCardBlock` only — blocks access cards
+   - Stage 5 (12 months) → `dispatchCarPlateBlock` only + legal approval — blocks vehicle plates
+   - Both gated by `shouldBlock` (threshold check)
+   - Stage 5 WhatsApp message updated to mention vehicle access restriction
+4. **dispatch-enforcement.ts refactor:** Replaced single `dispatchAccessBlock` with `dispatchAccessCardBlock` (access_card systems only) and `dispatchCarPlateBlock` (car_plate systems only). Old `dispatchAccessBlock` kept as deprecated shim calling both. `dispatchAccessRestore` unchanged (restores both).
+5. **escalation-settings route:** GET now returns `block_minimum_amount` (from collection_settings) and `moa_connected: { access_card, car_plate }` (derived from moa_agents.config.systems). PUT now also upserts `block_minimum_amount` to collection_settings.
+6. **CollectionTab UI:** Added "Minimum outstanding to trigger blocking" RM input above the pipeline. Stage hardware badges replaced: `hardware: 'access_card'` → MOA access card status; `hardware: 'car_plate'` → MOA car plate status. Green "MOA Connected" if the system type is enabled in moa_agents; amber "Connect via Settings → MOA" (links to /bm/settings/moa) if not. DEFAULT_STAGES updated: stage 4 hardware `'access_card'`, stage 5 hardware `'car_plate'` (was `'openclaw'` for both).
+**Modified:** `supabase/migrations/087_collection_block_minimum_amount.sql`, `lib/moa/dispatch-enforcement.ts`, `lib/crons/collection-engine.ts`, `app/api/bm/collection/escalation-settings/route.ts`, `components/bm/tabs/CollectionTab.tsx`, `docs/startup/actual-schema-columns.md`
 
 ## §MOA
 <!-- MOA architecture, command queue, moa_commands, moa_agents, Advelsoft, PyAutoGUI -->
@@ -1791,6 +1809,42 @@ New portal at /committee (separate route group). Read-only governance views: col
 | ID | Date | Category | One-line summary |
 |----|------|----------|-----------------|
 | D-0302 | 2026-04-01 | fix | MOA settings: removed agent-gating from software config sections |
+| D-0619 | 2026-04-12 | docs | MOA integration requirements audit: 31 skills mapped across access card (8), car plate (11), Advelsoft accounting (12). 13 P0 skills identified for CHV launch. New tables/columns needed listed. Sync frequencies recommended. Build order: Advelsoft P0 first (connection proven), access card + car plate blocked on recon. |
+| D-0623 | 2026-04-12 | feat | MOA integration schema foundation (Migration 086): 12 ALTER columns across 6 tables + 3 new tables. See detail below. |
+| D-0624 | 2026-04-12 | feat | Collections enforcement MOA dispatch: dispatchAccessBlock/Restore helper wired into stage-4 cron escalation + 3 payment restore paths. See detail below. |
+
+### D-0623 — MOA integration schema foundation
+**Date:** 2026-04-12
+**Context:** Before any MOA skill can run, the database needs columns for vendor system routing, legacy account mapping, LPR event storage, access card sync, and new tables for billing statements, ageing snapshots, and card swipe logs. All tables/columns from the D-0619 requirements audit.
+**Decision:**
+1. **moa_commands + moa_skills:** Added `system_id TEXT` to both (routes command to correct vendor system). Added `connection_type TEXT` to moa_skills (rdp/api/scraper).
+2. **units:** Added `vendor_account_number TEXT` — Advelsoft/legacy account number for the unit. Used by accounting skills to look up statements without prompting.
+3. **collection_accounts:** Added `vendor_balance NUMERIC` + `vendor_last_synced_at TIMESTAMPTZ` — mirrors outstanding balance from legacy accounting for reconciliation.
+4. **vehicle_logs:** Added `source TEXT DEFAULT 'manual'`, `lpr_event_id TEXT`, `confidence_score NUMERIC(5,2)`, `snapshot_url TEXT` — supports LPR auto-log via MOA car plate skill; existing manual entries default to 'manual'.
+5. **access_cards:** Added `vendor_card_id TEXT` + `vendor_synced_at TIMESTAMPTZ` — maps Minilab card to vendor access system card ID.
+6. **New: vendor_billing_statements** — PDF billing statements fetched from Advelsoft per unit per period. FK: buildings, units. RLS: building members.
+7. **New: vendor_ageing_snapshots** — Periodic ageing/overdue snapshots from legacy accounting system per building. RLS: building members.
+8. **New: access_card_logs** — Card swipe events (granted/denied/unknown) synced from physical access control system. FK: buildings, access_cards, building_gates. RLS: building members.
+9. **AI plumbing:** 3 ai_view_ views, 3 generic_read allowlist entries, 3 ai_tools rows (admin scope, handler names: getVendorBillingStatements, getVendorAgeingSnapshots, getAccessCardLogs).
+10. **TypeScript types:** Regenerated lib/database.types.ts + packages/shared/types/database.types.ts.
+**Modified:** `supabase/migrations/086_moa_integration_foundation.sql`, `lib/database.types.ts`, `packages/shared/types/database.types.ts`, `docs/startup/actual-schema-columns.md`
+
+### D-0624 — Collections enforcement MOA dispatch
+**Date:** 2026-04-12
+**Context:** Once MOA foundation schema exists (D-0623), the collection escalation pipeline needs to dispatch block/restore commands to connected vendor systems at the exact moment access_blocked flips. The MOA agent doesn't exist yet — commands sit as "pending" in moa_commands until the agent is built. No harm in dispatching early.
+**Decision:**
+1. **lib/moa/dispatch-enforcement.ts** — new shared helper with two exports:
+   - `dispatchAccessBlock(buildingId, unitId)` — queries active access_cards + deduplicated vehicle plate numbers for the unit, checks moa_agents.config.systems for enabled access_card/car_plate systems, inserts moa_commands rows (skill_name: `block_unit_access_cards` / `block_unit_plates`).
+   - `dispatchAccessRestore(buildingId, unitId)` — same logic, skill_name: `restore_unit_access_cards` / `restore_unit_plates`.
+   - Both are fire-and-forget (callers `.catch(() => {})`). Both log to audit_log with full context (card_numbers, plate_numbers, systems).
+   - Only dispatches if the building has at least one registered moa_agents row with `enabled: true` systems — zero-overhead for buildings without MOA.
+2. **Block trigger:** `lib/crons/collection-engine.ts` case 4 — after WhatsApp notification, calls `dispatchAccessBlock(buildingId, unitId).catch(() => {})`.
+3. **Restore triggers (3 paths):**
+   - `app/api/bm/collection/approve-payment/route.ts` — after OpenClaw restore call, adds `dispatchAccessRestore(session.buildingId, unit.id).catch(() => {})`.
+   - `app/api/webhooks/billplz/route.ts` — inside the `access_blocked && newBalance <= 0` block, adds `dispatchAccessRestore(buildingId, unitId).catch(() => {})`.
+   - `lib/collection/installment.ts` `approveInstallmentPlan()` — after `access_blocked: false` update, adds `dispatchAccessRestore(p.building_id, p.unit_id).catch(() => {})`.
+4. **No new API routes or migrations** — purely application-layer wiring.
+**Modified:** `lib/moa/dispatch-enforcement.ts` (new), `lib/crons/collection-engine.ts`, `app/api/bm/collection/approve-payment/route.ts`, `app/api/webhooks/billplz/route.ts`, `lib/collection/installment.ts`
 
 ## §Resident
 <!-- resident portal, /resident, WhatsApp reverse OTP, resident import -->
@@ -1799,6 +1853,30 @@ New portal at /committee (separate route group). Read-only governance views: col
 |----|------|----------|-----------------|
 | D-0367 | 2026-04-05 | feature | Resident notifications: lib/notifications/resident.ts helper (WA preferred, TG fallback). Wired into payment approve/reject, resident registration approve/reject, renovation approve/reject. Facility bookings already had WA notifications. All best-effort with try/catch. |
 | D-0558 | 2026-04-11 | refactor | Residents page restructure: Building Structure + CSV Import removed from /bm/residents, UnitsOverviewSection promoted to full-width hero tab. /bm/settings gets new Import Residents card → /bm/settings/import. UnitsOverviewSection + ImportSection exported from BlocksTab.tsx. AddResidentInlineDialog added to UnitsOverviewSection toolbar (name, phone, email, IC, block-grouped unit selector, role). |
+| D-0626 | 2026-04-12 | feat | Resident portal vendor balance + statement PDFs. See detail below. |
+| D-0627 | 2026-04-12 | feat | BM dashboard vendor ageing widget — precise Advelsoft counts with Minilab fallback. See detail below. |
+
+### D-0627 — BM dashboard vendor ageing widget
+**Date:** 2026-04-12
+**Context:** Dashboard "Collection & Finance" card showed a static 4-cell grid of `months_overdue` counts (coarse, Minilab-calculated). Now that `vendor_ageing_snapshots` exists (D-0623), upgrade to precise Advelsoft data when a fresh snapshot is available.
+**Decision:**
+1. **New API `/api/bm/dashboard/ageing`**: Checks `vendor_ageing_snapshots` for a record with `snapshot_date >= now() - 3 days`. If found → returns vendor data (`source: 'vendor'`). If not → groups `collection_accounts` by `months_overdue` and returns computed counts + amounts (`source: 'minilab'`). Response shape: `{ source, snapshot_date, current_count, current_amount, overdue_30_count, overdue_30_amount, overdue_60_count, overdue_60_amount, overdue_90_plus_count, overdue_90_plus_amount, total_overdue_amount }`.
+2. **`AgeingWidget` component** (inline in dashboard page): Lazy-loads from the new endpoint independently of the main dashboard fetch. Shows 4 bucket cards (Current, 1–30d, 31–60d, 90+d) with count + RM amount (vendor: amounts per overdue bucket not available so only total overdue shown; Minilab: all amounts calculated). Source badge: green "Source: Advelsoft" or amber "Source: Minilab estimate". Snapshot date shown when vendor data. Skeleton loading state. Bucket cards tinted red when overdue count > 0.
+3. Graceful degradation: before MOA syncs any snapshot data, shows Minilab estimates automatically. After MOA runs, switches to Advelsoft precision. Zero config.
+**Modified:** `app/api/bm/dashboard/ageing/route.ts` (new), `app/bm/dashboard/page.tsx`
+
+### D-0626 — Resident portal vendor balance + statement PDFs
+**Date:** 2026-04-12
+**Context:** Now that MOA schema has `vendor_balance`/`vendor_last_synced_at` on `collection_accounts` and `vendor_billing_statements` table, the resident balance screen should show the authoritative vendor figure when available, and expose PDF statements for download.
+**Decision:**
+1. **Balance API update** (`/api/resident/unit/[unitId]/balance`): Now selects `vendor_balance` and `vendor_last_synced_at` from `collection_accounts`. Computes "recent" = synced within 7 days. Returns `vendor_balance: null` if stale/absent so frontend falls back cleanly.
+2. **BalanceScreen update:** If `vendor_balance` is non-null → show as primary figure with "Last synced: {date}" label. If null → show `outstanding_balance` with grey "approximate — vendor sync pending" note. Added "My Statements" button row that opens `StatementsScreen`.
+3. **StatementsScreen** (inline component in unit page): Full-screen overlay listing statement PDFs. Empty state with explanatory message. Each row: period (April 2026), total_due, [View PDF] button → calls `/api/resident/statement?unit_id&period` → opens R2 URL in new tab. "Statement not yet available" alert if no PDF yet.
+4. **New API `/api/resident/statements`**: GET all statement periods for a unit (ordered desc). Auth via resident ownership check on `residents` table.
+5. **New API `/api/resident/statement`**: GET single statement by unit+period. Returns `{ available: true, pdf_url }` or `{ available: false }`.
+6. **New page `/resident/statements`**: Standalone page (for deep-linking). Takes `?unitId=` query param. Same list/download UI. Accessible via "My Statements" service tile added to SERVICES array.
+7. All screens work with empty data — content appears automatically when MOA syncs.
+**Modified:** `app/api/resident/unit/[unitId]/balance/route.ts`, `app/api/resident/statements/route.ts` (new), `app/api/resident/statement/route.ts` (new), `app/resident/unit/[unitId]/page.tsx`, `app/resident/statements/page.tsx` (new)
 
 ### D-0561 — Building tenancy module (JMB/MC as landlord)
 **Date:** 2026-04-11
@@ -1880,6 +1958,17 @@ New portal at /committee (separate route group). Read-only governance views: col
 3. **Console deep-link:** Unit numbers now navigate via `router.push('/bm/console?unit_id=...')` (same tab, uses existing console `?unit_id=` param support). Units with no phone AND no email render as muted non-clickable text ("No contact" pattern). Table rows have `hover:bg-gray-50` for interactivity.
 4. **Panel animation:** `duration-300 ease-out` for smoother slide-in. Header upgraded to `text-lg font-semibold` title + `text-sm` subtitle.
 **Modified:** `components/bm/tabs/DataDashboardTab.tsx`
+
+### D-0622 — Fuzzy unit matching for resident auto-registration (CHV launch blocker)
+**Date:** 2026-04-12
+**Context:** CHV residents failing to register via WhatsApp — typing natural unit formats like "GF 03-04" or "GF/03-04" but DB stores full prefixed form "CS/GF-03-04". The existing fuzzy match in `auto-register.ts` only did substring ILIKE `%GF 03-04%` which fails because separators differ between input and DB value. Reported by Alvina (+60123246148).
+**Decision:**
+1. **Reuse `normalizeUnitNumber` from `lib/import/normalize-unit.ts`:** Strips all separators (spaces, dashes, slashes, dots, underscores) and uppercases — already proven in CSV import flow.
+2. **New `fuzzyMatchUnit()` helper** in `lib/whatsapp/auto-register.ts` with 4-tier matching strategy: (a) exact normalized match (separator/case agnostic), (b) suffix match on normalized form (handles missing block prefix — "GF0304" matches "CSGF0304"), (c) substring match on normalized form, (d) zero-pad numeric segments BEFORE normalizing then retry suffix+substring (handles "gf 3-4" → pad to "gf 03-04" → normalize to "GF0304").
+3. **New `getBlockHints()` helper:** When 0 matches, extracts leading alpha prefix from input (e.g., "GF") and shows up to 5 units containing that prefix. Replaces generic "Valid formats: Ag-08, CS/A-1-01..." with contextual "Did you mean one of these? CS/GF-03-04, CS/GF-03-05..."
+4. **Loads all building units once** for fuzzy matching (vs previous per-query ILIKE). Acceptable for buildings up to ~2000 units. Exact ILIKE match still tried first as fast path.
+5. **Tested inputs:** "GF 03-04" → CS/GF-03-04 ✓, "GF/03-04" → CS/GF-03-04 ✓, "A-1-01" → CS/A-1-01 ✓, "A1-01" → CS/A-1-01 ✓, "gf 3-4" → CS/GF-03-04 ✓, "gf3-4" → CS/GF-03-04 ✓, "GF-03-04" → CS/GF-03-04 ✓, "a 1 01" → CS/A-1-01 ✓, "B-1-01" → CS/B-1-01 ✓, exact "CS/GF-03-04" → CS/GF-03-04 ✓. All 10/10 pass.
+**Modified:** `lib/whatsapp/auto-register.ts`
 
 ---
 
