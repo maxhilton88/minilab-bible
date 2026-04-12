@@ -4,7 +4,7 @@
 
 ## §Table-Index
 <!-- All tables: pipe-separated list -->
-access_cards | agm_cards | agm_egm_meetings | agm_eligible | agm_motions | agm_proxies | agm_sessions | agm_votes | ai_tools | announcements | api_cost_alerts | approvals | asset_logs | assets | attendance_logs | audit_log | bank_accounts | bid_pricing_tiers | blocks | building_applications | building_documents | building_gaps | building_gates | building_geofences | building_onboarding | building_org_assignments | building_payment_settings | building_spaces | building_tenancies | building_tenancy_documents | building_working_hours | buildings | cases | chase_loops | cleaning_logs | collection_accounts | collection_escalations | collection_settings | collection_transactions | console_read_state | contact_channels | contacts_temp | contractor_org_building_assignments | contractor_orgs | contractor_schedule_templates | contractor_shifts | contractor_staff | contractor_staff_building_assignments | contractor_visits | daily_reports | data_imports | dead_letter_queue | dev_buildings | dev_defect_logs | dev_defects | dev_handover_checklists | dev_rectification_contractors | dev_unit_types | dev_units | developer_orgs | developments | document_chunks | email_log | face_enrollments | facilities | facility_bookings | fine_settings | form_templates | guard_shifts | guardhouse_incidents | guardhouses | hardware_store_applications | hardware_store_order_items | hardware_store_orders | hardware_store_products | hardware_store_subscriptions | in_unit_tender_bids | in_unit_tenders | insurance_policies | integration_requests | inventory_usage | investor_leads | invitations | job_materials | kiosk_devices | leave_balances | leave_policies | leave_requests | legal_records | maintenance_events | maintenance_schedules | media_search_index | messages | moa_agents | moa_commands | moa_skills | moa_supported_systems | monitoring_events | notification_preferences | notifications | openclaw_connections | organisations | parcels | partner_agencies | patrol_beacons | patrol_logs | patrol_schedules | pdpa_audit_log | pdpa_consents | pdpa_deletion_requests | pending_residents | permission_audit_log | personal_properties | petty_cash | phone_call_logs | phone_change_log | platform_issues | platform_settings | procurement_items | procurement_order_lines | procurement_orders | property_listings | public_holidays | push_notification_subscriptions | raw_imports | rental_listings | renovation_applications | reports_daily_snapshot | resident_pwa_sessions | security_flags | sender_profiles | service_visits | staff_permissions | supplier_building_relationships | supplier_credit_accounts | supplier_invoices | suppliers | telegram_group_settings | tenancies | tenancy_documents | tender_bids | tender_commissions | tenders | tickets | unit_occupancy_status | units | user_roles | users | utility_bills | vehicle_fines | vehicle_logs | vendor_building_contracts | vendor_performance_history | vendor_subscriptions | vendor_wallets | vendors | visitors | voice_knowledge_base | voice_leads | voice_unanswered | wallet_transactions | whatsapp_templates | worker_activation_codes
+access_card_logs | access_cards | agm_cards | agm_egm_meetings | agm_eligible | agm_motions | agm_proxies | agm_sessions | agm_votes | ai_tools | announcements | api_cost_alerts | approvals | asset_logs | assets | attendance_logs | audit_log | bank_accounts | bid_pricing_tiers | blocks | building_applications | building_documents | building_gaps | building_gates | building_geofences | building_onboarding | building_org_assignments | building_payment_settings | building_spaces | building_tenancies | building_tenancy_documents | building_working_hours | buildings | cases | chase_loops | cleaning_logs | collection_accounts | collection_escalations | collection_settings | collection_transactions | console_read_state | contact_channels | contacts_temp | contractor_org_building_assignments | contractor_orgs | contractor_schedule_templates | contractor_shifts | contractor_staff | contractor_staff_building_assignments | contractor_visits | daily_reports | data_imports | dead_letter_queue | dev_buildings | dev_defect_logs | dev_defects | dev_handover_checklists | dev_rectification_contractors | dev_unit_types | dev_units | developer_orgs | developments | document_chunks | email_log | face_enrollments | facilities | facility_bookings | fine_settings | form_templates | guard_shifts | guardhouse_incidents | guardhouses | hardware_store_applications | hardware_store_order_items | hardware_store_orders | hardware_store_products | hardware_store_subscriptions | in_unit_tender_bids | in_unit_tenders | insurance_policies | integration_requests | inventory_usage | investor_leads | invitations | job_materials | kiosk_devices | leave_balances | leave_policies | leave_requests | legal_records | maintenance_events | maintenance_schedules | media_search_index | messages | moa_agents | moa_commands | moa_skills | moa_supported_systems | monitoring_events | notification_preferences | notifications | openclaw_connections | organisations | parcels | partner_agencies | patrol_beacons | patrol_logs | patrol_schedules | pdpa_audit_log | pdpa_consents | pdpa_deletion_requests | pending_residents | permission_audit_log | personal_properties | petty_cash | phone_call_logs | phone_change_log | platform_issues | platform_settings | procurement_items | procurement_order_lines | procurement_orders | property_listings | public_holidays | push_notification_subscriptions | raw_imports | rental_listings | renovation_applications | reports_daily_snapshot | resident_pwa_sessions | security_flags | sender_profiles | service_visits | staff_permissions | supplier_building_relationships | supplier_credit_accounts | supplier_invoices | suppliers | telegram_group_settings | tenancies | tenancy_documents | tender_bids | tender_commissions | tenders | tickets | unit_occupancy_status | units | user_roles | users | utility_bills | vehicle_fines | vehicle_logs | vendor_ageing_snapshots | vendor_billing_statements | vendor_building_contracts | vendor_performance_history | vendor_subscriptions | vendor_wallets | vendors | visitors | voice_knowledge_base | voice_leads | voice_unanswered | wallet_transactions | whatsapp_templates | worker_activation_codes
 
 ---
 
@@ -118,7 +118,8 @@ created_at, updated_at
 ### units
 ```
 id, building_id, unit_number, floor, unit_type, share_units, size_sqft,
-strata_title_reference, is_active, created_at, updated_at
+strata_title_reference, is_active, created_at, updated_at,
+vendor_account_number (TEXT)   -- Migration 086: Advelsoft/legacy account number for this unit
 ```
 **Note:** Column is `unit_type` NOT `type`
 
@@ -208,7 +209,9 @@ sla_due_at, resolved_at, created_at, updated_at
 ```
 id, building_id, unit_id, outstanding_balance, months_overdue,
 escalation_stage, access_blocked, access_blocked_at, form11_served_at,
-last_payment_amount, last_payment_date, created_at, updated_at
+last_payment_amount, last_payment_date, created_at, updated_at,
+vendor_balance (NUMERIC),              -- Migration 086: balance from legacy accounting system
+vendor_last_synced_at (TIMESTAMPTZ)    -- Migration 086: when vendor balance was last fetched
 ```
 
 ## §Table-collection_transactions
@@ -1300,6 +1303,7 @@ Actively used for attendance clock-in/out validation (D-0373). Enforced when is_
 | reminder_day_2 | integer | YES | 30 | |
 | form11_threshold_days | integer | YES | 90 | |
 | access_block_threshold_months | integer | YES | 3 | |
+| block_minimum_amount | numeric | YES | 0 | Migration 087: min outstanding before Stage 4/5 blocking fires; 0 = block at any amount |
 | created_at | timestamptz | YES | now() | |
 | updated_at | timestamptz | YES | now() | |
 
@@ -2370,6 +2374,10 @@ Single source of truth for all material usage (migration 059 / D-0368). Stock = 
 | logged_by | uuid | YES | | FK→users |
 | gate_id | uuid | YES | | FK→building_gates (D-0442) |
 | relationship | text | YES | NULL | owner/tenant/family — vehicle registrant relationship to unit (Migration 080) |
+| source | text | YES | 'manual' | Migration 086: 'manual'\|'lpr'\|'moa_sync' |
+| lpr_event_id | text | YES | | Migration 086: vendor LPR system event ID |
+| confidence_score | numeric(5,2) | YES | | Migration 086: LPR plate-read confidence % |
+| snapshot_url | text | YES | | Migration 086: LPR snapshot image URL |
 | created_at | timestamptz | YES | now() | |
 
 ## §Table-vendor_building_contracts
@@ -2744,6 +2752,80 @@ updated_at (TIMESTAMPTZ NOT NULL DEFAULT now())
 ```
 **RLS:** select = uploaded_by OR tenant_user_id = auth.uid(), insert/update/delete = uploaded_by only
 
+## §Table-access_cards
+### access_cards (Migration 070)
+```
+id (UUID PK DEFAULT gen_random_uuid()),
+building_id (UUID NOT NULL FK→buildings),
+unit_id (UUID FK→units),
+resident_id (UUID FK→residents),
+card_number (TEXT NOT NULL),
+status (TEXT CHECK IN ('active','deactivated','lost','returned')),
+issued_date (DATE),
+deactivated_at (TIMESTAMPTZ),
+notes (TEXT),
+created_at (TIMESTAMPTZ DEFAULT now()),
+updated_at (TIMESTAMPTZ DEFAULT now()),
+vendor_card_id (TEXT),         -- Migration 086: vendor system card ID
+vendor_synced_at (TIMESTAMPTZ) -- Migration 086: last sync from vendor access system
+```
+**RLS:** enabled; building members
+
+## §Table-access_card_logs
+### access_card_logs (Migration 086)
+```
+id (UUID PK DEFAULT gen_random_uuid()),
+building_id (UUID NOT NULL FK→buildings),
+access_card_id (UUID FK→access_cards),
+card_number (TEXT),
+gate_id (UUID FK→building_gates),
+door_name (TEXT),
+event_type (TEXT CHECK IN ('granted','denied','unknown')),
+event_at (TIMESTAMPTZ NOT NULL),
+vendor_event_id (TEXT),
+is_contractor (BOOLEAN DEFAULT false),
+created_at (TIMESTAMPTZ DEFAULT now())
+```
+**RLS:** SELECT = building_id IN user_roles
+**ai_view:** ai_view_access_card_logs (omits raw card details)
+
+## §Table-vendor_billing_statements
+### vendor_billing_statements (Migration 086)
+```
+id (UUID PK DEFAULT gen_random_uuid()),
+building_id (UUID NOT NULL FK→buildings),
+unit_id (UUID NOT NULL FK→units),
+vendor_account_number (TEXT),
+period (DATE NOT NULL),
+pdf_url (TEXT NOT NULL),
+total_due (NUMERIC),
+generated_at (TIMESTAMPTZ),
+fetched_at (TIMESTAMPTZ DEFAULT now()),
+created_at (TIMESTAMPTZ DEFAULT now())
+```
+**RLS:** SELECT = building_id IN user_roles
+**ai_view:** ai_view_vendor_billing_statements (omits pdf_url)
+
+## §Table-vendor_ageing_snapshots
+### vendor_ageing_snapshots (Migration 086)
+```
+id (UUID PK DEFAULT gen_random_uuid()),
+building_id (UUID NOT NULL FK→buildings),
+snapshot_date (DATE NOT NULL),
+pdf_url (TEXT),
+current_count (INTEGER DEFAULT 0),
+overdue_30_count (INTEGER DEFAULT 0),
+overdue_60_count (INTEGER DEFAULT 0),
+overdue_90_plus_count (INTEGER DEFAULT 0),
+total_current_amount (NUMERIC DEFAULT 0),
+total_overdue_amount (NUMERIC DEFAULT 0),
+data (JSONB DEFAULT '{}'),
+fetched_at (TIMESTAMPTZ DEFAULT now()),
+created_at (TIMESTAMPTZ DEFAULT now())
+```
+**RLS:** SELECT = building_id IN user_roles
+**ai_view:** ai_view_vendor_ageing_snapshots (omits data blob and pdf_url)
+
 ## §Table-moa_skills
 ### moa_skills
 ```
@@ -2755,7 +2837,9 @@ input_schema (JSONB NOT NULL),
 output_schema (JSONB NOT NULL),
 requires_rdp (BOOLEAN DEFAULT false),
 version (TEXT DEFAULT '1.0'),
-is_active (BOOLEAN DEFAULT true)
+is_active (BOOLEAN DEFAULT true),
+system_id (TEXT),          -- Migration 086: which vendor system this skill targets
+connection_type (TEXT)     -- Migration 086: e.g. 'rdp','api','scraper'
 ```
 **RLS:** select = public read
 
@@ -2789,7 +2873,8 @@ requested_by (UUID FK→users),
 requested_at (TIMESTAMPTZ DEFAULT now()),
 picked_up_at (TIMESTAMPTZ),
 completed_at (TIMESTAMPTZ),
-timeout_seconds (INT DEFAULT 30)
+timeout_seconds (INT DEFAULT 30),
+system_id (TEXT)           -- Migration 086: which vendor system to target
 ```
 **RLS:** all = building_id IN user_roles
 
