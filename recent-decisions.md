@@ -117,6 +117,7 @@ No exceptions. Applies to all RPCs including attendance, face matching, and any 
 
 | ID | Date | Category | One-line summary |
 |----|------|----------|-----------------|
+| D-0601 | 2026-04-12 | audit | V27 AI action execution audit — resident pipeline broken: specialist-agent.ts + executor.ts (40+ handlers) built but never wired to any webhook. Tier 1/2/3 resident messages receive silence. Admin pipeline works. 6 risks still open (R-01 Telegram fail-open, R-03 hallucination guard silent pass, R-06 contacts_temp no channel, R-07 material probe no retry, R-13 holidays hardcoded, R-15 routing analytics lost). Fix: wire specialistAgent→executeActions into v4-pipeline resident path (fixes all 23 intents in one change). Full audit: docs/startup/v27-ai-action-audit.md |
 | D-0322 | 2026-04-02 | architecture | Building State Snapshot: 11-line Redis-cached context injected into AI system prompt |
 | D-0323 | 2026-04-02 | architecture | 18 PostgreSQL AI views (PII-stripped, pre-joined); generic_read expanded to 18 views |
 | D-0324 | 2026-04-02 | architecture | Gap Engine: building_gaps table + scanner + notify dispatcher + daily cron |
