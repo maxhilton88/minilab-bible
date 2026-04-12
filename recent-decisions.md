@@ -136,6 +136,15 @@ No exceptions. Applies to all RPCs including attendance, face matching, and any 
 | D-0588 | 2026-04-11 | fix | Auto-reg prompt anti-hallucination: 3 new rules — no building data access, never invent facts, human_handoff after 3+ unanswered unit requests. |
 | D-0589 | 2026-04-11 | feat | AI fallback assignee: buildings.ai_fallback_user_id column (migration 079). BM Settings → AI Settings page with staff dropdown. GET+POST /api/bm/settings/ai-fallback. |
 | D-0590 | 2026-04-11 | feat | Human handoff action: shared executeHandoff() in lib/ai/handoff.ts. Pauses AI, creates case (category=ai_handoff), assigns to ai_fallback_user_id (or first BM), notifies assignee. Red "Handoff" badge in console left panel. sender_profile_id added to cases table (migration 079). ai-pause API extended for sender_profile_id. |
+| D-0602 | 2026-04-12 | fix | Wired specialist-agent.ts + executor.ts into v4-pipeline.ts for resident Tier 1/2/3. After semanticRoute() returns, pipeline now: builds RouterResult → fetchIntentData() → loads conversation history → runSpecialistAgent() (DeepSeek/Claude) → executeActions() (40+ handlers) → sets routing.response. All 23 resident intents now produce replies instead of silence. Error fallback: safe BM-referral message. |
+| D-0603 | 2026-04-12 | fix | R-01: Telegram webhook fail-closed. Previously accepted all requests when TELEGRAM_WEBHOOK_SECRET env var not set. Now returns 500 with error log when secret not configured. |
+| D-0604 | 2026-04-12 | fix | R-03: Hallucination guard flags for review when Supabase credentials missing. Previously returned flagForReview=false (silent pass). Now returns flagForReview=true + console.error. |
+| D-0605 | 2026-04-12 | fix | R-07: Material probe Redis key now set AFTER successful message send. Previously set BEFORE send — if send failed, stale key caused next user message to misroute as material reply. |
+| D-0606 | 2026-04-12 | fix | R-10: Anthropic provider migrated to credential vault. Constructor stores env var as sync fast path; resolveApiKey() loads from getCredential() (DB→env fallback) on first use. Supports key rotation without redeploy. |
+| D-0607 | 2026-04-12 | fix | R-06: contacts_temp gains channel (text, default 'whatsapp') + channel_id (text) columns. phone made nullable. CHECK constraint: phone OR channel_id must exist. auto-register.ts sets channel='whatsapp' + channel_id=phone on insert. |
+| D-0608 | 2026-04-12 | fix | R-13: Public holidays now loaded from public_holidays table (already populated with 2026 MY dates). after-hours.ts queries DB with 1h cache, falls back to hardcoded list if DB unreachable. checkWorkingHours() accepts dbHolidays param. Holidays updatable via DB — no annual code change needed. |
+| D-0609 | 2026-04-12 | feat | R-15: routing_analytics table + ai_view_routing_analytics (30-day window). logRoutingDecision() now does non-blocking supabaseAdmin insert alongside console.log. Indexes on (building_id, created_at) and (intent, created_at). Added to generic-read allowlist as routing_analytics + ai_analytics aliases. |
+| D-0612 | 2026-04-12 | feat | AI resident data enrichment — resident_data_staging table + enrich_resident executor action + AI prompt data collection rules + dashboard staging integration. See §Resident for full details. |
 
 ### AI Architecture Upgrades (D-0322–D-0326)
 - **Building State Snapshot**: 11-line Redis-cached snapshot (18 parallel queries, <250 tokens, no PII) injected into AI system prompt on every BM conversation start. TTL=1h. Hourly cron recomputes.
@@ -1324,6 +1333,11 @@ Additionally, the SW CACHE_NAME is `minilab-v2` — unchanged across all 7 fix a
 
 ---
 
+| D-0613 | 2026-04-12 | fix | Console attachment display: empty bubbles for media messages. Root cause: (1) pre-D-0596 code stored raw Meta media IDs as media_url — MessageMedia rejected non-URLs, rendering nothing; (2) when persistWhatsAppMedia fails (returns null), media-only messages (no caption) had both media_url=null and content=null → empty bubble. Fix: MessageMedia now accepts nullable url and shows type-appropriate placeholder (Photo/Video/Document/Voice message) when media_type exists but media_url is missing/invalid. Also added media_mime_type to case-messages API (was missing). Cleaned 1 bad DB row with raw media ID. |
+| D-0614 | 2026-04-12 | fix | WhatsApp media persistence to R2 fixed. Root cause: persistWhatsAppMedia() used platform-level META_ACCESS_TOKEN via getCredential(), but buildings with their own WABA (e.g. CHV) have per-building whatsapp_access_token — platform token can't access their media. Fix: replaced getCredential('META_ACCESS_TOKEN') with getBuildingWhatsAppConfig(buildingId) (same token resolution as sendTextMessage). Added console.error logging at every failure point (no token, Meta API lookup fail, binary download fail, empty file, R2 upload fail). Added success log with URL + size. Added webp to extension map. |
+
+---
+
 ## §Telegram
 <!-- Telegram bot, groups, Telethon microservice, auto-groups, bot login -->
 
@@ -1793,6 +1807,39 @@ New portal at /committee (separate route group). Read-only governance views: col
 4. **AI integration:** `ai_view_building_tenancies` added to generic-read allowlist with aliases (building_tenancies, tenancy, sewa). 17 allowed columns (space_name, space_type), 9 filterable.
 5. **Storage:** `tenancy-docs` added to ALLOWED_BUCKETS.
 **Modified:** `supabase/migrations/077_building_tenancies.sql`, `app/api/bm/building-tenancy/route.ts`, `app/api/bm/building-tenancy/[id]/route.ts`, `app/api/bm/building-tenancy/[id]/renew/route.ts`, `app/api/bm/building-tenancy/[id]/documents/route.ts`, `app/api/bm/building-tenancy/spaces/route.ts`, `components/bm/tabs/TenancyTab.tsx`, `lib/storage/index.ts`, `lib/ai/generic-read/allowed-tables.ts`
+
+### D-0610 — Resident data quality columns + backfill + contact status RPC
+**Date:** 2026-04-12
+**Context:** Foundation for Resident Data Dashboard. Need to track which residents are verified (approved registration), touched (have messaged us), imported (bulk import, no contact), or unreached (no resident record for a unit). Also need to track data source, phone validity, and verification metadata.
+**Decision:**
+1. **Migration 082:** Added 6 columns to `residents` table: `data_status` (text, CHECK: verified/touched/imported/unreached, default 'imported'), `last_contacted_at` (timestamptz), `data_source` (text, CHECK: import/whatsapp/telegram/email/manual/ai_enrichment/blast, default 'import'), `phone_valid` (boolean, default true), `verified_at` (timestamptz), `verified_by` (uuid FK→users).
+2. **Backfill:** Residents with messages via sender_profiles → 'touched' + last_contacted_at. Residents with approved resident_registration approval → 'verified' + verified_at. Remaining stay 'imported'. "Unreached" is absence of a resident record (query-time via LEFT JOIN units).
+3. **RPC `update_resident_contact_status(p_resident_id, p_channel)`:** Updates data_status to 'touched' (never downgrades 'verified'), sets last_contacted_at=now(), upgrades data_source from 'import' to channel name.
+4. **Webhook wiring:** WhatsApp webhook (after message insert) and Telegram webhook (handleResidentTelegramMessage) call the RPC fire-and-forget when a resident messages.
+5. **AI view:** `ai_view_resident_data_quality` — joins residents+units+blocks, exposes data_status/data_source/last_contacted_at/phone_valid/verified_at. Added to generic-read allowlist as `resident_data_quality` + `data_quality` alias.
+**Modified:** `supabase/migrations/082_resident_data_quality.sql`, `app/api/webhooks/whatsapp/route.ts`, `app/api/auth/telegram/webhook/route.ts`, `lib/ai/generic-read/allowed-tables.ts`, `lib/database.types.ts`
+
+### D-0611 — Resident data dashboard — new first tab on /bm/residents
+**Date:** 2026-04-12
+**Context:** BMs need visibility into how complete and accurate their resident database is, especially before outreach blasts. Built on the data quality columns from D-0610.
+**Decision:**
+1. **API route `GET /api/bm/residents/data-quality`:** Single endpoint returns summary stats, per-block breakdown, pending resident registration approvals, and monthly activity metrics. Uses `requirePermission('settings.staff')`. Fetches all units+residents+blocks in parallel, computes aggregates in-memory for efficiency (single round of queries, no N+1).
+2. **New tab structure on `/bm/residents`:** 3 tabs — "Data dashboard" (new, default first tab) | "Units & Residents" (existing) | "Tenancy" (existing). Existing tab content unchanged.
+3. **Dashboard layout (5 sections):** (1) Summary cards — total database, owners, tenants, family members with counts and percentages. (2) Data quality bars — verified/touched/imported/unidentified as horizontal progress bars with counts. (3) Two-column: pending verifications (approve/reject inline via existing PATCH /api/bm/approvals/[id]) + this month activity (new contacts, AI updates, verified, bounce rate). (4) Block breakdown table — per-block completeness with progress bars, status pills, expandable detail rows (8 stats per block), action column. (5) Action buttons — "Plan outreach blast" (disabled, coming soon) + "Export data" (client-side CSV generation from blocks data).
+4. **Design:** Matches existing BM portal style (rounded-xl border bg-card pattern from ReportsTab). Mobile responsive (2x2 grid on mobile, horizontal scroll on table). Loading skeleton while API loads.
+**Modified:** `app/api/bm/residents/data-quality/route.ts`, `components/bm/tabs/DataDashboardTab.tsx`, `app/bm/residents/page.tsx`
+
+### D-0612 — AI resident data enrichment — staging table, executor action, prompt update, dashboard integration
+**Date:** 2026-04-12
+**Context:** AI handles resident conversations but never collects profile data. Residents often reveal role (owner/tenant), related contacts, and emails during normal conversation. This data should be captured but requires BM approval before updating records.
+**Decision:**
+1. **Migration 083 — `resident_data_staging` table:** Staging area for AI-collected resident data. Columns: building_id, resident_id (nullable for new), unit_id, full_name, phone, email, ic_number, role (owner/tenant/family/occupant), related_person_name/phone/role (for cross-references like tenant→owner), source_channel, source_message_id, ai_confidence (high/medium/low), status (pending/approved/rejected/merged), reviewed_by/at, review_notes. RLS enabled. Indexes on (building_id, status) and (resident_id). AI view `ai_view_resident_data_staging` for generic read.
+2. **`enrich_resident` executor action:** New action in lib/ai/actions/executor.ts. Inserts into resident_data_staging with building context from ActionContext (channel added to ActionContext type + v4-pipeline.ts wiring). Both lower/upper case aliases registered.
+3. **AI prompt data collection rules:** Added to RESIDENT context type in prompts.ts. 7 rules: (1) ask owner/tenant if unknown, (2) tenant→ask for owner info, (3) owner→ask for tenant info, (4) ask email optionally, (5) NEVER ask IC, (6) MAX 1 question per conversation, (7) skip if emergency/frustrated. Confidence guide: high=explicit, medium=implied, low=inferred.
+4. **Staging approval API — `PATCH /api/bm/residents/data-quality/staging/[id]`:** Handles approve (→merge) and reject. On approve: updates existing resident or creates new one, handles related_person as separate resident record, sets data_status=verified + data_source=ai_enrichment. On reject: marks rejected with notes.
+5. **Dashboard integration:** GET /api/bm/residents/data-quality now queries resident_data_staging in parallel, merges staging items into pending list sorted by created_at. DataDashboardTab.tsx shows staging items with purple "AI update" badge, confidence level badge (green/amber/red), role and related person info. Approve/reject calls staging API with optimistic UI removal.
+6. **Generic read allowlist:** ai_view_resident_data_staging added with aliases: resident_data_staging, staging, enrichment. Keywords: staging, enrichment, pending data, data updates.
+**Modified:** `supabase/migrations/083_resident_data_staging.sql`, `lib/ai/actions/types.ts`, `lib/ai/actions/executor.ts`, `lib/ai/v4-pipeline.ts`, `lib/ai/prompts.ts`, `app/api/bm/residents/data-quality/staging/[id]/route.ts`, `app/api/bm/residents/data-quality/route.ts`, `components/bm/tabs/DataDashboardTab.tsx`, `lib/ai/generic-read/allowed-tables.ts`
 
 ---
 

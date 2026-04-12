@@ -127,9 +127,13 @@ strata_title_reference, is_active, created_at, updated_at
 ```
 id, building_id, unit_id, full_name, phone, email, ic_number,
 role (enum: resident_role_type), is_active, move_in_date, move_out_date,
-pdpa_consent (boolean), pdpa_consent_at (timestamp), user_id, created_at, updated_at
+pdpa_consent (boolean), pdpa_consent_at (timestamp), user_id, created_at, updated_at,
+data_status (text, default 'imported', CHECK: verified/touched/imported/unreached),
+last_contacted_at (timestamptz), data_source (text, default 'import', CHECK: import/whatsapp/telegram/email/manual/ai_enrichment/blast),
+phone_valid (boolean, default true), verified_at (timestamptz), verified_by (uuid FK→users)
 ```
 **NOT present:** `pdpa_consent_date` (correct name is `pdpa_consent_at`), `status` (use `is_active`)
+**Migration 082:** Added data quality columns: data_status, last_contacted_at, data_source, phone_valid, verified_at, verified_by. Backfilled from messages (→touched) and approvals (→verified). RPC `update_resident_contact_status(p_resident_id, p_channel)` auto-updates on inbound messages.
 
 ## §Table-users
 ### users
@@ -1321,15 +1325,42 @@ Actively used for attendance clock-in/out validation (D-0373). Enforced when is_
 |--------|------|----------|---------|-------|
 | id | uuid | NO | gen_random_uuid() | PK |
 | building_id | uuid | NO | | FK→buildings |
-| phone | text | NO | | |
+| phone | text | YES | | D-0607: nullable for email-only reg |
 | full_name | text | YES | | |
 | message_preview | text | YES | | |
+| channel | text | YES | 'whatsapp' | D-0607: whatsapp/telegram/email |
+| channel_id | text | YES | | D-0607: phone/telegram_id/email |
 | first_contact_at | timestamptz | YES | now() | |
 | reviewed_by | uuid | YES | | FK→users |
 | review_action | text | YES | 'pending' | |
 | reviewed_at | timestamptz | YES | | |
 | created_at | timestamptz | YES | now() | |
 | updated_at | timestamptz | YES | now() | |
+
+CHECK: phone IS NOT NULL OR channel_id IS NOT NULL
+
+## §Table-routing_analytics
+### routing_analytics
+
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| id | uuid | NO | gen_random_uuid() | PK |
+| building_id | uuid | YES | | FK→buildings |
+| channel | text | NO | | whatsapp/telegram/email/web |
+| sender_type | text | YES | | resident/staff/bm/unknown |
+| tier | smallint | NO | | 0-4 |
+| handler | text | YES | | e.g. direct_balance_check |
+| intent | text | YES | | e.g. MAINTENANCE_COMPLAINT |
+| confidence | numeric(5,2) | YES | | 0.00-1.00 |
+| processing_time_ms | integer | YES | | |
+| model_used | text | YES | | deepseek-chat / claude-sonnet |
+| actions_executed | text[] | YES | | action types array |
+| had_response | boolean | YES | true | |
+| error | text | YES | | |
+| created_at | timestamptz | YES | now() | |
+
+RLS: enabled. Indexes: (building_id, created_at DESC), (intent, created_at DESC).
+View: ai_view_routing_analytics (30-day window).
 
 ## §Table-contractor_org_building_assignments
 ### contractor_org_building_assignments
@@ -3114,3 +3145,37 @@ RLS: enabled. building_id isolation.
 ### ai_view_building_tenancies
 Columns: id, building_id, space_name, space_type, block_name, tenant_name, monthly_rent, deposit_amount, start_date, end_date, is_active, terminated_at, notes, created_at, expiry_status, days_to_expiry
 Source: building_tenancies JOIN building_spaces LEFT JOIN blocks
+
+## §Table-resident_data_staging
+
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| id | uuid | NO | gen_random_uuid() | PK |
+| building_id | uuid | NO | — | FK buildings(id) |
+| resident_id | uuid | YES | — | FK residents(id), null if new resident |
+| unit_id | uuid | YES | — | FK units(id) |
+| full_name | text | YES | — | |
+| phone | text | YES | — | |
+| email | text | YES | — | |
+| ic_number | text | YES | — | |
+| role | text | YES | — | CHECK: owner, tenant, family, occupant |
+| related_person_name | text | YES | — | Cross-reference (e.g. tenant→owner) |
+| related_person_phone | text | YES | — | |
+| related_person_role | text | YES | — | CHECK: owner, tenant |
+| source_channel | text | NO | — | whatsapp, telegram, email |
+| source_message_id | uuid | YES | — | |
+| ai_confidence | text | YES | 'medium' | CHECK: high, medium, low |
+| status | text | YES | 'pending' | CHECK: pending, approved, rejected, merged |
+| reviewed_by | uuid | YES | — | FK users(id) |
+| reviewed_at | timestamptz | YES | — | |
+| review_notes | text | YES | — | |
+| created_at | timestamptz | YES | now() | |
+| updated_at | timestamptz | YES | now() | |
+
+Indexes: idx_staging_building_status (building_id, status), idx_staging_resident (resident_id)
+RLS: enabled. building_id isolation.
+Migration: 083_resident_data_staging.sql
+
+### ai_view_resident_data_staging
+Columns: id, building_id, resident_id, unit_id, full_name, role, related_person_name, related_person_role, ai_confidence, status, source_channel, created_at
+Source: resident_data_staging (direct select, no joins)
