@@ -236,6 +236,7 @@ id, building_id, visitor_name, visitor_phone, visitor_ic, unit_id,
 hosting_resident_id, visit_purpose, is_preregistered, check_in_at,
 check_out_at, logged_by, photo_url, qr_code, vehicle_plate, visit_date,
 ic_photo_url, license_photo_url, gate_id,
+checkout_gate_id (UUID FK→building_gates — mig 091, tracks exit gate),
 status (TEXT DEFAULT 'active' CHECK active/checked_in/expired/cancelled — mig 073),
 pass_number (TEXT, nullable — mig 090),
 created_at
@@ -243,6 +244,7 @@ created_at
 <!-- visit_date DATE added in migration 062 (D-0415) -->
 <!-- ic_photo_url, license_photo_url TEXT added in migration 063 (D-0417) -->
 <!-- gate_id uuid FK→building_gates added (D-0442) -->
+<!-- checkout_gate_id uuid FK→building_gates added (D-0650, mig 091) -->
 
 ## §Table-facilities
 ### facilities
