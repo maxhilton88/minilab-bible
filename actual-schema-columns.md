@@ -126,7 +126,7 @@ vendor_account_number (TEXT)   -- Migration 086: Advelsoft/legacy account number
 ## §Table-residents
 ### residents
 ```
-id, building_id, unit_id, full_name, phone, email, ic_number,
+id, building_id, unit_id, full_name, phone (nullable), email, ic_number,
 role (enum: resident_role_type), is_active, move_in_date, move_out_date,
 pdpa_consent (boolean), pdpa_consent_at (timestamp), user_id, created_at, updated_at,
 data_status (text, default 'imported', CHECK: verified/touched/imported/unreached),
@@ -135,6 +135,7 @@ phone_valid (boolean, default true), verified_at (timestamptz), verified_by (uui
 ```
 **NOT present:** `pdpa_consent_date` (correct name is `pdpa_consent_at`), `status` (use `is_active`)
 **Migration 082:** Added data quality columns: data_status, last_contacted_at, data_source, phone_valid, verified_at, verified_by. Backfilled from messages (→touched) and approvals (→verified). RPC `update_resident_contact_status(p_resident_id, p_channel)` auto-updates on inbound messages.
+**Migration 089:** `phone` changed from NOT NULL → nullable (D-0633). Email-only contacts linked from console have no phone.
 
 ## §Table-users
 ### users
