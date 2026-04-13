@@ -23,7 +23,7 @@
 | `DEEPSEEK_API_KEY` | DeepSeek V3 — ROUTINE messages (85%), Router classification |
 | `ANTHROPIC_API_KEY` | Claude Sonnet 4 — SENSITIVE/LEGAL (15%), ReAct queries. Model: `claude-sonnet-4-20250514` |
 | `DASHSCOPE_API_KEY` | Alibaba — Qwen2.5-VL image captioning + text-embedding-v3 |
-| `GEMINI_API_KEY` | Gemini Live — voice sales agent on website |
+| `GEMINI_API_KEY` | Gemini Live (voice sales agent) + Gemini Flash-8B (AI vision pre-processor D-0641) |
 | `GOOGLE_VISION_KEY` | Google Vision API — OCR for document pipeline |
 | `OPENAI_EMBEDDING_KEY` | OpenAI text embeddings — RAG document chunking |
 
