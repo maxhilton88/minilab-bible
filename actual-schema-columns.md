@@ -628,7 +628,7 @@ classification (TEXT NOT NULL DEFAULT 'unknown'),  -- D-0455 migration 068 — u
 company (TEXT),  -- D-0480 migration 069 — company/label for external contacts
 created_at (TIMESTAMPTZ), updated_at (TIMESTAMPTZ)
 ```
-**Unique:** (building_id, phone) WHERE phone IS NOT NULL; (building_id, telegram_id) WHERE telegram_id IS NOT NULL; (building_id, email) WHERE email IS NOT NULL
+**Unique:** (building_id, phone) WHERE phone IS NOT NULL; (phone, building_id) WHERE phone IS NOT NULL (D-0631 migration 088); (building_id, telegram_id) WHERE telegram_id IS NOT NULL; (building_id, email) WHERE email IS NOT NULL
 **CHECK:** phone IS NOT NULL OR email IS NOT NULL OR telegram_id IS NOT NULL (no zombie profiles)
 **Enum:** `sender_type_enum` = resident, contractor, supplier, committee, staff, unknown
 **Classification values:** unknown (new/unnamed), saved (BM named but unclassified), external (external contact with optional company — D-0480), resident (linked to unit via resident_id)
