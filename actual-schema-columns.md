@@ -237,6 +237,7 @@ hosting_resident_id, visit_purpose, is_preregistered, check_in_at,
 check_out_at, logged_by, photo_url, qr_code, vehicle_plate, visit_date,
 ic_photo_url, license_photo_url, gate_id,
 status (TEXT DEFAULT 'active' CHECK active/checked_in/expired/cancelled — mig 073),
+pass_number (TEXT, nullable — mig 090),
 created_at
 ```
 <!-- visit_date DATE added in migration 062 (D-0415) -->
