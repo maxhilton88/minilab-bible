@@ -1,5 +1,5 @@
 # CLAUDE.md — Minilab Platform
-<!-- Version: V25 · 2026-04-11 -->
+<!-- Version: V28 · 2026-04-12 -->
 <!-- THIS IS THE ONLY FILE READ AT STARTUP. Everything else is lazy-loaded via the Router. -->
 
 ---
@@ -80,6 +80,7 @@ Match your task to a row. Read only what's listed. If no row matches, you probab
 | Procurement / hardware store | recent-decisions.md | §Procurement |
 | Collection / chase engine | recent-decisions.md | §Collections |
 | MOA / office agent / Advelsoft | recent-decisions.md | §MOA |
+| MOA architecture / build spec / skills / connectors | MOA-SPEC.md | Full file OK |
 | Resident portal / WhatsApp OTP | recent-decisions.md | §Resident |
 | Supplier / store portal | recent-decisions.md | §Supplier-Store |
 
@@ -148,7 +149,7 @@ Infra:
 4. NEW TABLE CHECKLIST: Create ai_view_ for it, add to generic_read allowlist, add keywords to ai_tools.
 5. ROUTER: If this session introduced a new feature area or pattern → add a row to §4 Router in THIS file.
 6. STATE: Update §7 Current State below (version, counts, pending items).
-7. GRAPH: If major architectural change → update docs/startup/GRAPH_REPORT.md.
+7. GRAPH: If major architectural change → update docs/startup/graph-report.md.
 8. LIST files changed.
 9. COMMIT with prefix (feat: | fix: | docs: | refactor: | chore:) and push to main.
 10. SYNC BIBLE: cd docs/startup && git add -A && git commit -m "bible: sync V{XX}" && git push origin main && cd ../..
@@ -157,21 +158,22 @@ Infra:
 
 ## §7 · Current State
 
-Version: V25 (2026-04-11)
-Database: ~165 tables · migrations 001-058+
-Pages: ~287 · API routes: ~390 · Decisions: D-0421+ · Portals: 17+
+Version: V28 (2026-04-13)
+Database: ~170 tables · migrations 001-091 (checkout_gate_id on visitors)
+Pages: ~289 · API routes: ~396 · Decisions: D-0650 · Portals: 17+
 
 Active priorities:
 1. Bug fixes and cleanup pass (pre-MOA)
-2. CHV onboarding (Hoe Zee How, 700+ units) — create security+cleaning orgs, assign to CHV, set geofence
+2. CHV onboarding (Hoe Zee How, 700+ units) — create security+cleaning orgs, assign to CHV, set geofence; staff walkthrough recon pending
 3. E2E testing with Seeteng at Lumi Residency (497c38b5-271d-4316-9580-93096d70038e)
-4. MOA Phase 2 — command queue, Electron/Python agent, Advelsoft RDP via PyAutoGUI/OpenCV
+4. MOA Phase 2 build — Playwright-based universal legacy bridge; 3 systems: Advelsoft (Type 2 cloud RDP, keyboard-first via HTML5 canvas), access card, car plate LPR
 
 Pending fixes:
 - Guard VMS walk-in: collapse to single-step, white Lucide icons, remove name field
 - DISABLE_DEV_LOGIN=true for production
 - Superadmin PDPA deletion
 - BM staff page dropdown transparency bug
+- MOA-SPEC.md sync to bible repo (docs/startup/)
 
 Key contacts:
 - Seeteng — BM, Lumi Residency (test user)
