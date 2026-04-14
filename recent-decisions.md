@@ -1107,6 +1107,7 @@ Additionally, the SW CACHE_NAME is `minilab-v2` — unchanged across all 7 fix a
 
 | ID | Date | Category | One-line summary |
 |----|------|----------|-----------------|
+| D-0660 | 2026-04-14 | feat | Console People panel clickable contacts with nudge-to-chat. All resident names in right sidebar People section are now clickable → switches to Contact view and opens their chat. If resident has no sender_profile yet, one is created automatically (POST /api/bm/console/create-sender-profile — finds by resident_id or phone match, or creates new). Unit-details API now joins sender_profiles to return sender_profile_id per person. PersonInfo type extended with sender_profile_id. CenterTimeline empty state shows nudge prompt with NudgeWhatsAppButton for contacts with no messages. pendingContactNavRef handles race condition when contact isn't in loaded list yet. |
 | D-0644 | 2026-04-13 | fix | P0 — BM console ticket reply routing fixed (see §AI-Pipeline D-0644 for full detail). app/api/bm/console/send/route.ts. |
 | D-0633 | 2026-04-13 | fix | Console "Link Contact to Unit" ISE: `residents.phone` was NOT NULL — email-only contacts (no phone) crashed on insert. Migration 089 makes phone nullable. API sets data_source='manual'. Frontend no longer auto-fills email address as resident name (skips if name contains @). |
 | D-0632 | 2026-04-13 | fix | Email attachment extraction: recursive MIME traversal for Gmail-forwarded nested attachments. Email webhook content-length + parse error logging for diagnosing dropped emails. |
