@@ -1391,6 +1391,42 @@ Additionally, the SW CACHE_NAME is `minilab-v2` — unchanged across all 7 fix a
 
 ---
 
+### D-0673 — Migration 093: case_participants + case_category_defaults (V31-S2)
+**Date:** 2026-04-15
+**Context:** Kanban redesign foundation — two new tables required before UI work in S3.
+**Decision:**
+1. **case_participants:** `id, case_id, user_id, role (participant|watcher), added_by, created_at`. UNIQUE(case_id, user_id). RLS: bm/staff. CASCADE on case delete.
+2. **case_category_defaults:** `id, building_id, category, default_assignee_id, default_participant_ids UUID[], created_at, updated_at`. UNIQUE(building_id, category). RLS: bm only.
+3. **ai_view_case_participants:** Joins case_participants + users + cases. Exposes user_name + building_id.
+4. **generic_read allowlist:** `case_participants` → `ai_view_case_participants`.
+5. **ai_tools:** `case_participants`, scope=admin, category=admin_query, handler=generic_read, min_role=staff.
+6. **RLS fix discovered:** user_role_type enum has no 'admin' value — policies use 'bm'/'staff' only.
+**Files:** `supabase/migrations/093_case_participants_and_defaults.sql`, `lib/ai/generic-read/allowed-tables.ts`, `packages/shared/types/database.types.ts`
+
+---
+
+### D-0674 — API: case participants CRUD + category defaults CRUD (V31-S2)
+**Date:** 2026-04-15
+**Context:** REST endpoints for the two new tables.
+**Decision:**
+1. **GET/POST /api/bm/cases/[id]/participants:** Auth: getBuildingSession. GET enriches user_name via second query (avoids FK name guessing pre-types-regen). POST verifies case + user both belong to building, upserts on conflict.
+2. **DELETE /api/bm/cases/[id]/participants/[participantId]:** Auth: getBuildingSession. Deletes by participant row id + case_id.
+3. **GET/PUT /api/bm/settings/case-defaults:** Auth: getBuildingSession. PUT role-checks for bm only. Upserts on (building_id, category).
+**Files:** `app/api/bm/cases/[id]/participants/route.ts`, `app/api/bm/cases/[id]/participants/[participantId]/route.ts`, `app/api/bm/settings/case-defaults/route.ts`
+
+---
+
+### D-0675 — Auto-participants wired into all case creation paths (V31-S2)
+**Date:** 2026-04-15
+**Context:** Every case creation path now fires applyAutoParticipants after INSERT.
+**Decision:**
+1. **Shared helper:** `lib/cases/auto-participants.ts` — `applyAutoParticipants(supabase, caseId, buildingId, category, assignedTo, createdBy)`. Fetches category defaults, applies default assignee if none set, upserts participant rows. Fire-and-forget.
+2. **Wired into:** POST /api/bm/cases, lib/ai/handoff.ts, lib/ai/actions/maintenance.ts, lib/ai/actions/complaints.ts (3 functions), lib/ai/actions/emergency.ts, app/api/resident/cases/route.ts.
+3. **Dead upload removed:** CreateCaseDialog file picker, upload loop, PATCH for attachments removed from `app/bm/cases/CasesClient.tsx`. Case attachments will live in Console timeline. DB column + PATCH acceptance untouched.
+**Files:** `lib/cases/auto-participants.ts`, `app/api/bm/cases/route.ts`, `lib/ai/handoff.ts`, `lib/ai/actions/maintenance.ts`, `lib/ai/actions/complaints.ts`, `lib/ai/actions/emergency.ts`, `app/api/resident/cases/route.ts`, `app/bm/cases/CasesClient.tsx`
+
+---
+
 ## §Telegram
 <!-- Telegram bot, groups, Telethon microservice, auto-groups, bot login -->
 

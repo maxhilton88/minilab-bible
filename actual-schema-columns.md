@@ -207,6 +207,27 @@ sla_due_at, resolved_at, created_at, updated_at
 **Migration 079:** Added sender_profile_id (UUID FK → sender_profiles) — links handoff cases to unregistered contacts. Added 'ai_handoff' to case_category_type enum (D-0590).
 **Migration 081:** Added related_unit_id (UUID FK → units, indexed) — for interfloor leak cases linking affected/source unit. Added 'interfloor_leak' to case_category_type enum (D-0600).
 
+## §Table-case_participants
+### case_participants
+```
+id, case_id (FK → cases CASCADE), user_id (FK → users CASCADE),
+role (text CHECK: participant|watcher, default participant),
+added_by (FK → users nullable), created_at
+UNIQUE(case_id, user_id)
+```
+**Migration 093:** New table (D-0673). RLS: bm/staff can manage. AI view: ai_view_case_participants (joins users + cases, exposes user_name + building_id).
+
+## §Table-case_category_defaults
+### case_category_defaults
+```
+id, building_id (FK → buildings CASCADE), category (text),
+default_assignee_id (FK → users SET NULL nullable),
+default_participant_ids (UUID[] default '{}'),
+created_at, updated_at
+UNIQUE(building_id, category)
+```
+**Migration 093:** New table (D-0673). RLS: bm only. Used by applyAutoParticipants helper on case creation.
+
 ## §Table-collection_accounts
 ### collection_accounts
 ```
