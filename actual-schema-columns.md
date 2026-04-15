@@ -306,6 +306,9 @@ created_at
 NOTE: contractor_staff_id is now nullable (dropped NOT NULL in migration 057).
 user_id added for building staff who are not in contractor_staff table.
 Either contractor_staff_id OR user_id must be set — not both required.
+**Migration 093:** Unique partial indexes prevent duplicate open sessions (race condition fix):
+- `idx_attendance_one_open_user` on (user_id, building_id) WHERE clock_out_at IS NULL AND user_id IS NOT NULL
+- `idx_attendance_one_open_contractor` on (contractor_staff_id, building_id) WHERE clock_out_at IS NULL AND contractor_staff_id IS NOT NULL
 
 ## §Table-parcels
 ### parcels
