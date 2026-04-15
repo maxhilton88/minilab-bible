@@ -1941,6 +1941,7 @@ Single source of truth for all material usage (migration 059 / D-0368). Stock = 
 | sender_profile_id | uuid | YES | | FK→sender_profiles |
 | status | text | YES | | pending/processing/complete/failed (async pipeline) |
 | private | boolean | YES | false | true = internal note (amber card in console, channel='internal_note') D-0434 |
+| unit_id | uuid | YES | | FK→units — activity cards scoped to unit (D-0665). idx_messages_unit_id partial index WHERE unit_id IS NOT NULL |
 | ai_processed | boolean | YES | false | |
 | ai_intent | text | YES | | |
 | ai_model_tier | USER-DEFINED | YES | | enum |
