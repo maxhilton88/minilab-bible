@@ -116,6 +116,16 @@ No exceptions. Applies to all RPCs including attendance, face matching, and any 
 
 ---
 
+### D-0681 — /guard attendance → full staff kiosk (V31-S6)
+**Date:** 2026-04-16
+**Context:** `/guard` had a `GuardAttendance` component that only let the logged-in guard clock in/out (face scan, `self=true` API param, no department selection). Any other staff — cleaners, management, contractors — had to use the separate `/kiosk` URL. Guardhouse tablets run `/guard`, so non-guard staff couldn't clock in at the guardhouse.
+**Decision:**
+1. Extracted full kiosk state machine from `app/kiosk/page.tsx` into `components/attendance/AttendanceKiosk.tsx`. Component takes `buildingId`, `buildingName`, `embedded`, `autoCloseAfterSuccess`, `onClose` props. Starts at `department` screen (no setup), handles: department → staff_list → confirm → face_scan → success.
+2. Refactored `app/kiosk/page.tsx` to a thin wrapper: handles localStorage/URL-param setup, then renders `<AttendanceKiosk>`.
+3. In `app/guard/page.tsx`: removed `GuardAttendance` component entirely. Added a full-width "Staff Attendance" card above the visitor grid (Clock icon, emerald). Tapping it opens `AttendanceKiosk embedded={true}` as a `fixed inset-0 z-50` overlay. Passes `buildingId` from guard session state (no URL param, no setup screen needed). After 3-second success screen, `onClose` fires and returns to `/guard` home.
+4. `/kiosk?building=<uuid>` still works identically. Wake lock kept on standalone kiosk only.
+**Modified:** `components/attendance/AttendanceKiosk.tsx` (new), `app/kiosk/page.tsx`, `app/guard/page.tsx`
+
 ---
 
 ## §AI-Pipeline
