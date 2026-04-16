@@ -125,6 +125,8 @@ strata_title_reference, is_active, created_at, updated_at,
 vendor_account_number (TEXT)   -- Migration 086: Advelsoft/legacy account number for this unit
 ```
 **Note:** Column is `unit_type` NOT `type`
+**Migration 096 indexes:** `idx_units_unit_number_normalized` (B-tree on `unit_number_normalized(unit_number)`), `idx_units_unit_number_trgm` (GIN on `unit_number_normalized(unit_number)` with `gin_trgm_ops`). Used by `search_units_smart` RPC.
+**Extension:** `pg_trgm` enabled (Migration 096) for fuzzy unit search.
 
 ## §Table-residents
 ### residents
@@ -2990,6 +2992,8 @@ All RPCs compute MYT date boundaries in Postgres using AT TIME ZONE 'Asia/Kuala_
 | get_attendance_unsynced | p_limit int DEFAULT 100 | TABLE(all attendance_logs columns) | Unsynced logs (synced_to_reports=false, has clock_out_at) for cron |
 | get_attendance_today_stats | (none) | TABLE(all attendance_logs columns) | All attendance today across all buildings (for cron summary) |
 | match_face | p_building_id uuid, p_descriptor vector(128), p_threshold float | TABLE(user_id, contractor_staff_id, similarity) | Face recognition match against face_enrollments |
+| unit_number_normalized | p text | text | Immutable — canonicalize unit string: lowercase + strip non-alphanumeric. "GB/01-05" → "gb0105" |
+| search_units_smart | p_building_id uuid, p_query text DEFAULT '', p_block_id uuid DEFAULT NULL, p_limit int DEFAULT 200 | SETOF units | 3-path waterfall: (A) block filter → all units uncapped, (B) no query → first N, (C) exact normalized ILIKE → fuzzy pg_trgm fallback. SECURITY DEFINER. Migration 096. |
 
 ---
 
