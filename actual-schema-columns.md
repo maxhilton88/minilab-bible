@@ -3230,6 +3230,7 @@ Indexes: idx_building_spaces_building (building_id)
 RLS: enabled. building_id isolation.
 
 ## §Table-building_tenancies
+<!-- Migration 077_building_tenancies applied to prod at V32d Batch A. TS types regenerated. -->
 ### building_tenancies
 | Column | Type | Nullable | Default | Notes |
 |--------|------|----------|---------|-------|

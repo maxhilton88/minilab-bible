@@ -2447,3 +2447,23 @@ Full end-to-end PWA audit. 34 total fixes:
 **D-0696 (DEFERRED)** — 6 existing duplicate norm_keys in CHV DB (b0308, b0502a, d0203, d0902a, gs0107, s70203) — dirty stored versions alongside clean versions. Left alone (not touched by V32a). Canonicalize in D-0632 session.
 
 ---
+
+## §TypeScript-Cleanup
+
+| Decision | Date | Status | Summary |
+|----------|------|--------|---------|
+| D-0697 | 2026-04-16 | done | Types regenerated via `npx supabase gen types`. Migration 077_building_tenancies applied to prod first (table was missing). Eliminated 61 errors. |
+| D-0698 | 2026-04-16 | deferred | app/api/auth/telegram/webhook/route.ts full TS cleanup. File has 25+ `as any` casts; needs dedicated session. Auth-critical webhook — handle carefully. |
+| D-0699 | 2026-04-16 | done | V32d Batch A mechanical fixes. Error count: 108→26. Files: search routes (null→undefined), cases/participants (full_name??''), cases/route (category??''), guard/visitors (safeUserId??''), console/page.tsx (isUnlinkedContact??false), telegram+whatsapp+email (.catch→.then(null,...)), escalation-settings (PromiseLike+cast), contractors (string[] cast). |
+
+### D-0697–D-0699 — V32d Batch A TypeScript cleanup (2026-04-16)
+
+**Root cause:** `building_tenancies`, `building_spaces`, `building_tenancy_documents` tables existed in migration 077 (local) but had never been applied to the production Supabase project. Types were therefore stale, causing 61 type errors across the building-tenancy routes.
+
+**D-0697** — Applied migration `077_building_tenancies` to production via Supabase MCP. Fixed `ai_tools` INSERT (migration used wrong column `tool_type`; corrected to `scope='admin'`, `category='admin_query'`, `handler_name='generic_read'`). Regenerated `packages/shared/types/database.types.ts`. Eliminated 61 errors (108→47).
+
+**D-0698 (DEFERRED)** — `app/api/auth/telegram/webhook/route.ts` has 25+ `as any` casts throughout. Only touched line 459 (`.then().catch(console.error)` → `.then(null, console.error)`). Remainder deferred to dedicated session with careful review.
+
+**D-0699** — Mechanical Batch A fixes applied (108→26 errors). Remaining 26 errors are all T3/T4 deferred or skipped T2 with documented reasons (see SKIPPED section in session output). Skipped: `contractors/route.ts:93` (TS2769 string[] cast didn't resolve overload), `renovation/route.ts:64-71` (TS2589 type depth, no clean fix without `as any`), `residents/data-quality/staging/[id]/route.ts:76,93` (TS2769, risky without full staging type audit), `moa/dispatch-enforcement.ts:87` (TS2769 audit_log mismatch), `scripts/import-chv-gap-units.ts:108` (generic `table: string` — needs logic change).
+
+---
