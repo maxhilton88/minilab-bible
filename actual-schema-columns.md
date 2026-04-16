@@ -109,7 +109,8 @@ ai_disabled (boolean, NOT NULL, default false),
 created_at, updated_at
 ```
 **NOT present:** latitude, longitude, latitude_lng (no geo columns at all)
-**Migration 092:** Added ai_disabled (BOOLEAN NOT NULL DEFAULT false) — building-level AI kill switch. Checked by shouldSkipAI() before all per-sender checks. (D-0659)
+**Migration 095:** Retroactive tracking of ai_disabled column (already live from D-0659 dashboard add). `ADD COLUMN IF NOT EXISTS` for idempotency. (D-0682)
+**Migration 092 (dashboard):** Added ai_disabled (BOOLEAN NOT NULL DEFAULT false) — building-level AI kill switch. Checked by shouldSkipAI() before all per-sender checks. Also gates WhatsApp auto-registration for unknown senders (D-0684). (D-0659)
 **Migration 079:** Added ai_fallback_user_id (UUID FK → users) — building-level AI fallback assignee for handoff cases (D-0589).
 **Migration 078:** Added wa_app_secret (TEXT) — per-building Meta App Secret for HMAC webhook signature validation. Looked up by whatsapp_phone_number_id on inbound webhook.
 **Migration 049:** Added login_slug, building_user_id for building service account auth.
