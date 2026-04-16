@@ -2446,6 +2446,23 @@ Full end-to-end PWA audit. 34 total fixes:
 
 **D-0696 (DEFERRED)** — 6 existing duplicate norm_keys in CHV DB (b0308, b0502a, d0203, d0902a, gs0107, s70203) — dirty stored versions alongside clean versions. Left alone (not touched by V32a). Canonicalize in D-0632 session.
 
+### D-0705–D-0708 — V33 migration drift reconciled (2026-04-17)
+
+| ID | Date | Category | One-line summary |
+|----|------|----------|-----------------|
+| D-0705 | 2026-04-17 | fix | V33 — registered 5 already-applied migrations in schema_migrations (055, 063, 078, 089, 090). |
+| D-0706 | 2026-04-17 | fix | V33 — executed 3 pending data backfill migrations: 075, 076, 085. |
+| D-0707 | 2026-04-17 | chore | V33 — migration drift fully reconciled; 036-039 naming drift confirmed as content-applied-under-descriptive-names (no action). |
+| D-0708 | 2026-04-17 | rule | Standing rule: every new migration must be applied + verified in schema_migrations in the same session. |
+
+**D-0705** — Registered 5 DDL-only migrations that were applied to prod under different names or sequences but never recorded in `supabase_migrations.schema_migrations`. All DDL objects were confirmed present in prod via per-object audit before registering. SQL was NOT re-executed (055 has `CREATE POLICY` without `IF NOT EXISTS` — re-execution would error). Registered: `055_d7_defect_portal_billing_onboarding`, `063_visitors_doc_photos`, `078_buildings_wa_app_secret`, `089_residents_phone_nullable_visitors_doc_photos`, `090_visitors_pass_number`.
+
+**D-0706** — Executed 3 pending data backfill migrations. Dry-run counts matched audit exactly: 075 (42 HTML inbound messages → 0 remaining after clean), 076 (85 orphaned outbound emails → 0 matched via email_log join; no `resend_id` pairs existed, UPDATE ran cleanly), 085 (pool=992 imported residents, 10 matched via email→sender_profiles join, now marked `data_status='touched'`). All non-destructive UPDATEs with targeted WHERE clauses. Registered all 3 after execution.
+
+**D-0707** — Migration drift reconciliation complete. 036-039 naming drift confirmed as content applied under descriptive names (not repo filenames) — no action needed, content is in prod. Two DB-only entries (049, 053) have no corresponding repo files — legacy manual migrations, non-blocking, flagged for future hygiene. All 8 previously unregistered repo migrations now recorded with version format `20240101000NNN` (sorts before all real 2026 entries).
+
+**D-0708 (STANDING RULE)** — Every new migration file MUST be applied to prod in the same session it is created. Verify immediately after apply: `SELECT name FROM supabase_migrations.schema_migrations WHERE name LIKE '{number}%';`. If migration contains `CREATE POLICY` without `IF NOT EXISTS`, note in closing block that re-execution is unsafe (register-only on re-apply). Closing block MUST confirm migration applied, not just file created.
+
 ---
 
 ## §TypeScript-Cleanup
