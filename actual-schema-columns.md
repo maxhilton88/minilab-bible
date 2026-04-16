@@ -1963,6 +1963,10 @@ Single source of truth for all material usage (migration 059 / D-0368). Stock = 
 | status | text | YES | | pending/processing/complete/failed (async pipeline) |
 | private | boolean | YES | false | true = internal note (amber card in console, channel='internal_note') D-0434 |
 | unit_id | uuid | YES | | FK→units — activity cards scoped to unit (D-0665). idx_messages_unit_id partial index WHERE unit_id IS NOT NULL |
+| media_urls | jsonb | YES | | D-0677: multi-image activity cards — array of {url, mime_type, filename?} |
+| ref_id | uuid | YES | | D-0677: polymorphic ref to source record (no FK). idx_messages_ref WHERE ref_id IS NOT NULL |
+| ref_table | text | YES | | D-0677: names the table ref_id points to ('cases', 'renovation_applications', etc.) |
+| metadata | jsonb | YES | | D-0677: rich card metadata (case_number, title, category, assigned_to_name, resolution_note) so Console renders without refetch |
 | ai_processed | boolean | YES | false | |
 | ai_intent | text | YES | | |
 | ai_model_tier | USER-DEFINED | YES | | enum |
@@ -1970,6 +1974,7 @@ Single source of truth for all material usage (migration 059 / D-0368). Stock = 
 | is_flagged | boolean | YES | false | |
 | created_at | timestamptz | YES | now() | |
 <!-- idx_messages_external_message_id_unique: UNIQUE on external_message_id WHERE external_message_id IS NOT NULL (D-0431) -->
+<!-- idx_messages_ref: partial btree on (ref_table, ref_id) WHERE ref_id IS NOT NULL (D-0677) -->
 <!-- staff_role_permissions table DROPPED in migration 064 (D-0424) — was redundant, user_roles.staff_role_id column also dropped -->
 
 ## §Table-monitoring_events
