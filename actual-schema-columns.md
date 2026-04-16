@@ -136,11 +136,13 @@ role (enum: resident_role_type), is_active, move_in_date, move_out_date,
 pdpa_consent (boolean), pdpa_consent_at (timestamp), user_id, created_at, updated_at,
 data_status (text, default 'imported', CHECK: verified/touched/imported/unreached),
 last_contacted_at (timestamptz), data_source (text, default 'import', CHECK: import/whatsapp/telegram/email/manual/ai_enrichment/blast),
-phone_valid (boolean, default true), verified_at (timestamptz), verified_by (uuid FK→users)
+phone_valid (boolean, default true), verified_at (timestamptz), verified_by (uuid FK→users),
+created_via (text, nullable)    -- Migration 097: backfill tag e.g. 'csv_backfill_v32a'
 ```
 **NOT present:** `pdpa_consent_date` (correct name is `pdpa_consent_at`), `status` (use `is_active`)
 **Migration 082:** Added data quality columns: data_status, last_contacted_at, data_source, phone_valid, verified_at, verified_by. Backfilled from messages (→touched) and approvals (→verified). RPC `update_resident_contact_status(p_resident_id, p_channel)` auto-updates on inbound messages.
 **Migration 089:** `phone` changed from NOT NULL → nullable (D-0633). Email-only contacts linked from console have no phone.
+**Migration 097:** Added `created_via` (nullable text) — backfill audit tag. CHV V32a rows tagged 'csv_backfill_v32a'. CHV total post-V32a: 1,081 residents (1,002 existing + 79 new).
 
 ## §Table-users
 ### users
@@ -3305,3 +3307,18 @@ Migration: 083_resident_data_staging.sql
 ### ai_view_resident_data_staging
 Columns: id, building_id, resident_id, unit_id, full_name, role, related_person_name, related_person_role, ai_confidence, status, source_channel, created_at
 Source: resident_data_staging (direct select, no joins)
+
+## §Table-import_backfill_log
+### import_backfill_log (migration 097, V32a)
+```
+id (uuid PK DEFAULT gen_random_uuid()),
+building_id (uuid NOT NULL FK→buildings),
+run_tag (text NOT NULL),        -- e.g. 'v32a_chv_gap'
+csv_source (text NOT NULL),     -- file path of source CSV
+stats (jsonb NOT NULL),         -- run-level counters (unitsInserted, residentsInserted, etc.)
+ran_at (timestamptz DEFAULT now()),
+ran_by (text)                   -- 'service_role' for script runs
+```
+**Index:** idx_import_backfill_log_building on building_id
+**Purpose:** Lightweight per-run audit for any building backfill. One row per script execution. No per-row detail — just aggregate stats JSONB.
+**CHV V32a run:** run_tag='v32a_chv_gap', unitsInserted=80, residentsInserted=79.

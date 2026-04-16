@@ -2417,3 +2417,33 @@ Full end-to-end PWA audit. 34 total fixes:
 ---
 
 ---
+
+## §Data-Backfill
+<!-- Data gap reconciliation, CSV re-imports, backfill runs across any building -->
+
+| ID | Date | Category | One-line summary |
+|----|------|----------|-----------------|
+| D-0691 | 2026-04-16 | fix | V32a — re-imported 80 missing CHV units from original CSV. |
+| D-0692 | 2026-04-16 | fix | V32a — residents co-imported per new unit; auto-link to users where phone matched. |
+| D-0693 | 2026-04-16 | feat | import_backfill_log table added (migration 097) for backfill audit. |
+| D-0694 | 2026-04-16 | deferred | VMS floor-3 blindspot — guards report S4/S5/S6/S7 floor-3 units missing but they exist. |
+| D-0695 | 2026-04-16 | deferred | GQ ground-floor notation (G-05 vs G-5) — normalizer handles search; stored format deferred to D-0632. |
+| D-0696 | 2026-04-16 | deferred | 6 DB duplicate norm_keys (b0308, b0502a, d0203, d0902a, gs0107, s70203) — deferred to D-0632. |
+
+### D-0691–D-0693 — V32a CHV gap re-import (2026-04-16)
+
+**Root cause:** Original CSV import job skipped rows — confirmed via three-way CSV ∩ DB reconciliation. Largest single gap: Sawtelle Block B (34 units owned by TINDAK MURNI SDN BHD, not previously flagged by any user). All 80 missing units were "Old master only — no form response" entries (no phone data collected).
+
+**D-0691** — Re-imported 80 missing CHV units from `CHV_merged_database.csv` (1,129 source rows, 786 unique norm_keys). Script: `scripts/import-chv-gap-units.ts`. Final DB state: 792 unit rows, 786 unique norm_keys. Per-block breakdown: Sawtelle Block B 33→67 (+34), Lakeview Block E 31→40 (+9), Lakeview Block F 32→40 (+8), Suria 4 35→43 (+8, includes 2 company-owned), others small gaps.
+
+**D-0692** — Residents co-imported per CSV row for new units only (79 rows; 1 skipped blank name). Role mapped from CSV resident_type (owner/tenant → resident_role_type enum). Phone stored as-is from CSV (raw digits, no +60 prefix — these are old-master rows with no WhatsApp form data). Auto-link: 0 matched (expected — no phones on these rows). Unlinked residents await WhatsApp OTP → existing V14-V15 auto-link flow. `created_via='csv_backfill_v32a'` tag added for audit filtering. `data_source='import'`, `data_status='imported'`.
+
+**D-0693** — `import_backfill_log` table (migration 097) added. One row written per run: building_id, run_tag, csv_source, stats JSONB, ran_at, ran_by. Lightweight — no per-row audit, just run-level summary. Future backfills across any building should write here.
+
+**D-0694 (DEFERRED)** — Guards report units in S4/S5/S6/S7 floor-3 as "missing" in VMS dropdown but they exist in DB. Likely dropdown scrolling UX issue; needs device recon before fix. Track as V32b.
+
+**D-0695 (DEFERRED)** — GQ ground-floor notation: some units stored as "G-05" vs "G-5". Normalizer strips non-alphanum so search works (`g05` = `g5`). Canonical stored format part of D-0632 canonicalization pass.
+
+**D-0696 (DEFERRED)** — 6 existing duplicate norm_keys in CHV DB (b0308, b0502a, d0203, d0902a, gs0107, s70203) — dirty stored versions alongside clean versions. Left alone (not touched by V32a). Canonicalize in D-0632 session.
+
+---
