@@ -1507,6 +1507,21 @@ Additionally, the SW CACHE_NAME is `minilab-v2` — unchanged across all 7 fix a
 
 ---
 
+### D-0729 — Per-user unread_count wired into console threads endpoint (V34, 2026-04-17)
+**Date:** 2026-04-17
+**Context:** FIX-3. The threads tab (/api/bm/console/threads) hardcoded `unread_count: 0` at all 5 thread-push locations. The contacts and units tabs already computed per-user unread correctly via console_read_state. Result was every BM saw all threads as "read" regardless of actual state — missed comms between users.
+**Root cause:** readStateMap was already fetched at the top of the handler (D-0432, lines 41–48) but never applied when building thread rows. The 5 hardcoded zeroes were dead weight.
+**Decisions:**
+1. **Single-file fix** — `app/api/bm/console/threads/route.ts` only. No schema changes, no mark-read changes, no contacts/units changes.
+2. **Bridge via messages.sender_profile_id** — added `sender_profile_id` to the select on WhatsApp, Telegram DM, and Web Chat message fetches. Case messages also get `direction` added. Messages already carry sender_profile_id, so no extra DB round-trips.
+3. **Pattern** — for each thread type (WhatsApp/Telegram DM/Web Chat/Cases), one consolidated loop builds two maps: `entityId → senderProfileId` (first non-null seen) and `entityId → [inbound Date[]]`. Then: `unreadCount = lastRead ? inboundTimes.filter(t => t > lastRead).length : inboundTimes.length`. Exactly mirrors the contacts endpoint pattern.
+4. **Telegram groups** — `unread_count: 0` retained. Group threads have no per-sender_profile concept.
+5. **Case message fetch limit** — changed from `caseIds.length * 2` (only 2 messages total across all cases — a bug) to `Math.max(caseIds.length * 20, 100)` for accurate inbound counting per case.
+6. **Per-user isolation confirmed** — readStateMap is scoped to `session.userId` + `buildingId`. Two BMs see independent unread states. Opening a thread marks it read only for the BM who opened it.
+**Files:** `app/api/bm/console/threads/route.ts`
+
+---
+
 ## §Telegram
 <!-- Telegram bot, groups, Telethon microservice, auto-groups, bot login -->
 
