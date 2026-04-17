@@ -2541,6 +2541,7 @@ Full end-to-end PWA audit. 34 total fixes:
 | D-0712 | 2026-04-17 | feature | Inspection scheduling loose ends: time picker, WhatsApp on clear, AI activity logging |
 | D-0713 | 2026-04-17 | feature | Calendar popup for staff inspection scheduling + interfloor leak multi-unit linked cases |
 | D-0714 | 2026-04-17 | feature | Calendar button on BM cases overview — opens CalendarScheduleModal, pre-fills inspection date in Create Case dialog |
+| D-0715 | 2026-04-17 | fix | POST route missing inspection activity logging — cases created via Calendar flow now generate Console activity |
 
 **D-0710** (2026-04-17) — Inspection date picker UI on BM case detail sheet.
 - `app/bm/cases/CasesClient.tsx`: Added `inspection_scheduled_at: string | null` to `CaseDetail` interface. Added `updateInspectionDate(dateStr)` async function with optimistic update + rollback. Added "Inspection Scheduled" section (after urgent toggle, before separator) using native `<input type="date">` with `min` set to today + Clear button when date is set.
@@ -2568,3 +2569,8 @@ Full end-to-end PWA audit. 34 total fixes:
 - **`app/bm/cases/CasesClient.tsx`** — CreateCaseDialog: Category is now controlled state (`selectedCategory`). Added `interfloor_leak` option. When selected: amber-bordered panel shows "Related Units" multi-select (auto-suggests above/below based on unit_number `-` split + floor ±1), manual add/remove chips, "Schedule same inspection time for all units" checkbox + date+time pickers. Button label dynamically shows "Create N Linked Tasks" when related units are selected. `suggestRelatedUnits()` helper parses unit_number to find above/below units in same block.
 - **`app/api/bm/cases/route.ts`**: POST body extended with `inspection_scheduled_at?` and `related_units?: string[]`. Primary case insert now includes `inspection_scheduled_at`. After primary case created, fire-and-forget loop creates one linked case per related unit — each with `related_case_id` → primary, `related_unit_id` → reporting unit, same inspection time. Multi-unit activity card logged.
 - Pattern: Option B (linked cases), not junction table. Each unit gets its own case in the staff task list. Staff navigate between linked cases individually.
+
+**D-0715** (2026-04-17) — POST route missing inspection activity logging.
+- **Root cause**: `app/api/bm/cases/route.ts` POST handler only logged `case_created` activity, ignoring `inspection_scheduled_at` in the payload. Cases created via Calendar → CreateCaseDialog had no Console timeline entry for the scheduled inspection.
+- **Fix**: After `case_created` insertActivityMessage, added conditional block: if `body.inspection_scheduled_at` is set, fire-and-forget `insertActivityMessage` with `action: 'inspection_scheduled'` and metadata (`scheduled_at`, `scheduled_by`, `case_number`, `case_title`).
+- **Result**: Creating a case with inspection date now generates two Console activities — `case_created` + `inspection_scheduled` — matching the PATCH flow from D-0710.
