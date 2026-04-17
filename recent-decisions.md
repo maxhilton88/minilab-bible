@@ -2539,6 +2539,8 @@ Full end-to-end PWA audit. 34 total fixes:
 | D-0710 | 2026-04-17 | feature | Inspection date picker in case detail sheet + activity logging + WhatsApp notify |
 | D-0711 | 2026-04-17 | feature | Staff task detail page shows inspection date + console activity cards wired |
 | D-0712 | 2026-04-17 | feature | Inspection scheduling loose ends: time picker, WhatsApp on clear, AI activity logging |
+| D-0713 | 2026-04-17 | feature | Calendar popup for staff inspection scheduling + interfloor leak multi-unit linked cases |
+| D-0714 | 2026-04-17 | feature | Calendar button on BM cases overview — opens CalendarScheduleModal, pre-fills inspection date in Create Case dialog |
 
 **D-0710** (2026-04-17) — Inspection date picker UI on BM case detail sheet.
 - `app/bm/cases/CasesClient.tsx`: Added `inspection_scheduled_at: string | null` to `CaseDetail` interface. Added `updateInspectionDate(dateStr)` async function with optimistic update + rollback. Added "Inspection Scheduled" section (after urgent toggle, before separator) using native `<input type="date">` with `min` set to today + Clear button when date is set.
@@ -2557,3 +2559,12 @@ Full end-to-end PWA audit. 34 total fixes:
 - `app/bm/cases/CasesClient.tsx`: Added optional time input (`<input type="time">`) next to date picker. `updateInspectionDate(dateStr, timeStr?)` combines date+time into ISO via `new Date(\`\${date}T\${time}:00\`).toISOString()`. Helpers `getLocalDate()` and `getLocalTime()` extract local values from stored UTC ISO. Time input disabled until date is set.
 - Edge cases confirmed OK: past dates blocked by `min` attr; committee uses different portal (no access to BM PATCH); resident-without-phone handled by `if (res?.phone)` guard; closed/resolved cases can still receive inspection dates (intentional — supports verification workflows).
 - `docs/capabilities-map.md`: Added §5 Case Management — Inspection Scheduling capability entry.
+
+**D-0713** (2026-04-17) — Calendar popup for staff inspection scheduling + interfloor leak multi-unit linked cases.
+- **Migration 099**: Added `related_case_id UUID REFERENCES cases(id) ON DELETE SET NULL` + partial index. Linked cases point back to their primary case. Already had `related_unit_id` from migration 081.
+- **`components/shared/CalendarScheduleModal.tsx`** (new): Reusable calendar grid modal. Month navigation, today highlighted, past dates disabled, "Today" shortcut. Calls `onSelect(dateStr: string)` on click. Closes on backdrop click or Escape.
+- **`app/app/tasks/[id]/page.tsx`**: Added "Schedule Inspection" / "Reschedule" button in action bar. Opens CalendarScheduleModal. On select → PATCH `/api/app/tasks/${id}` with `{ inspection_scheduled_at: iso }` (defaults to 09:00 local). Optimistic update on success.
+- **`app/api/app/tasks/[id]/route.ts`**: Extended PATCH body type to accept `inspection_scheduled_at?: string | null`. Builds updates object conditionally (no longer requires `status`). Logs `inspection_scheduled` / `inspection_cleared` activity card (same as BM portal). Returns `inspection_scheduled_at` in response.
+- **`app/bm/cases/CasesClient.tsx`** — CreateCaseDialog: Category is now controlled state (`selectedCategory`). Added `interfloor_leak` option. When selected: amber-bordered panel shows "Related Units" multi-select (auto-suggests above/below based on unit_number `-` split + floor ±1), manual add/remove chips, "Schedule same inspection time for all units" checkbox + date+time pickers. Button label dynamically shows "Create N Linked Tasks" when related units are selected. `suggestRelatedUnits()` helper parses unit_number to find above/below units in same block.
+- **`app/api/bm/cases/route.ts`**: POST body extended with `inspection_scheduled_at?` and `related_units?: string[]`. Primary case insert now includes `inspection_scheduled_at`. After primary case created, fire-and-forget loop creates one linked case per related unit — each with `related_case_id` → primary, `related_unit_id` → reporting unit, same inspection time. Multi-unit activity card logged.
+- Pattern: Option B (linked cases), not junction table. Each unit gets its own case in the staff task list. Staff navigate between linked cases individually.
