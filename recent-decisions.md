@@ -2538,6 +2538,7 @@ Full end-to-end PWA audit. 34 total fixes:
 |----|------|----------|-----------------|
 | D-0710 | 2026-04-17 | feature | Inspection date picker in case detail sheet + activity logging + WhatsApp notify |
 | D-0711 | 2026-04-17 | feature | Staff task detail page shows inspection date + console activity cards wired |
+| D-0712 | 2026-04-17 | feature | Inspection scheduling loose ends: time picker, WhatsApp on clear, AI activity logging |
 
 **D-0710** (2026-04-17) — Inspection date picker UI on BM case detail sheet.
 - `app/bm/cases/CasesClient.tsx`: Added `inspection_scheduled_at: string | null` to `CaseDetail` interface. Added `updateInspectionDate(dateStr)` async function with optimistic update + rollback. Added "Inspection Scheduled" section (after urgent toggle, before separator) using native `<input type="date">` with `min` set to today + Clear button when date is set.
@@ -2548,3 +2549,11 @@ Full end-to-end PWA audit. 34 total fixes:
 - `app/app/tasks/[id]/page.tsx`: Added `inspection_scheduled_at: string | null` to `CaseDetail` interface. Added Calendar import from lucide-react. Added inspection date row in meta info section (after resolved_at) — renders only when set, using `formatDateTime()` with Calendar icon.
 - Console: `inspection_scheduled` / `inspection_cleared` activity cards already rendered by `CenterTimeline.tsx` (Calendar + Trash2 icons). No changes needed.
 - E2E flow complete: BM sets date → activity in console → staff sees date in /app/tasks/[id].
+
+**D-0712** (2026-04-17) — Inspection scheduling loose ends + production polish.
+- `lib/console/insert-activity.ts`: Changed `userId: string` → `userId: string | null` to support system/AI actor.
+- `lib/ai/actions/maintenance.ts`, `complaints.ts`, `emergency.ts`: Added `insertActivityMessage` after each case insert (userId: null, actorName: 'AI Agent'). AI-created cases now appear in console timeline with `case_created` activity card.
+- `app/api/bm/cases/[id]/route.ts`: WhatsApp notification now fires on both schedule AND clear (previously schedule-only). Message: "🗑️ The scheduled inspection for your case #X has been cancelled."
+- `app/bm/cases/CasesClient.tsx`: Added optional time input (`<input type="time">`) next to date picker. `updateInspectionDate(dateStr, timeStr?)` combines date+time into ISO via `new Date(\`\${date}T\${time}:00\`).toISOString()`. Helpers `getLocalDate()` and `getLocalTime()` extract local values from stored UTC ISO. Time input disabled until date is set.
+- Edge cases confirmed OK: past dates blocked by `min` attr; committee uses different portal (no access to BM PATCH); resident-without-phone handled by `if (res?.phone)` guard; closed/resolved cases can still receive inspection dates (intentional — supports verification workflows).
+- `docs/capabilities-map.md`: Added §5 Case Management — Inspection Scheduling capability entry.
