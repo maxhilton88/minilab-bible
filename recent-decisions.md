@@ -2544,6 +2544,7 @@ Full end-to-end PWA audit. 34 total fixes:
 | D-0715 | 2026-04-17 | fix | POST route missing inspection activity logging — cases created via Calendar flow now generate Console activity |
 | D-0716 | 2026-04-17 | feature | Calendar inspection overview — dates with booked inspections show blue indicators; click to see list + navigate to case |
 | D-0717 | 2026-04-17 | feature | Case editing capabilities — edit title/description/category/priority, delete case, convert to interfloor |
+| D-0718 | 2026-04-17 | feature | Related units selector in case edit mode — interfloor leak creates linked cases from PATCH |
 
 **D-0710** (2026-04-17) — Inspection date picker UI on BM case detail sheet.
 - `app/bm/cases/CasesClient.tsx`: Added `inspection_scheduled_at: string | null` to `CaseDetail` interface. Added `updateInspectionDate(dateStr)` async function with optimistic update + rollback. Added "Inspection Scheduled" section (after urgent toggle, before separator) using native `<input type="date">` with `min` set to today + Clear button when date is set.
@@ -2588,3 +2589,9 @@ Full end-to-end PWA audit. 34 total fixes:
 - **Root cause**: `app/api/bm/cases/route.ts` POST handler only logged `case_created` activity, ignoring `inspection_scheduled_at` in the payload. Cases created via Calendar → CreateCaseDialog had no Console timeline entry for the scheduled inspection.
 - **Fix**: After `case_created` insertActivityMessage, added conditional block: if `body.inspection_scheduled_at` is set, fire-and-forget `insertActivityMessage` with `action: 'inspection_scheduled'` and metadata (`scheduled_at`, `scheduled_by`, `case_number`, `case_title`).
 - **Result**: Creating a case with inspection date now generates two Console activities — `case_created` + `inspection_scheduled` — matching the PATCH flow from D-0710.
+
+**D-0718** (2026-04-17) — Related units selector in case edit mode.
+- **Gap filled**: CreateCaseDialog had interfloor multi-unit logic (D-0713) but CaseDetailSheet edit mode did not. Converting a case to interfloor_leak via the "⋯ → Convert" button or manually changing category in edit mode now shows the related units panel.
+- **`app/bm/cases/CasesClient.tsx`**: Added `unit_id?: string | null` + `building_id?` to `CaseDetail` interface. Added `relatedUnitIds: string[]` and `editUnits: Unit[]` state to `CaseDetailSheet`. New useEffect loads units via `GET /api/bm/units` when `editMode && category === 'interfloor_leak'`; calls existing `suggestRelatedUnits()` to auto-pre-select above/below floors when `detail.unit_id` is set. Added interfloor panel UI (amber-bordered) after description textarea in edit mode — shows primary unit label, add-unit `<select>` (filtered to exclude primary + already-selected), removable chip badges, and "Saving will create N linked cases" hint. `saveChanges` passes `related_units: relatedUnitIds` in PATCH payload when category is interfloor. `cancelEdit` + caseId-change reset both new state vars.
+- **`app/api/bm/cases/[id]/route.ts`**: Added `related_units?: string[]` to PATCH body type. After main field update, if `related_units` + `category === 'interfloor_leak'`, fire-and-forget loop creates one linked case per unit (`related_case_id → id`, `related_unit_id → data.unit_id`). Activity card logs conversion with `related_unit_count` metadata. Also added `case_category_changed` activity message when category is changed.
+- Pattern: mirrors POST linked-case creation exactly; both paths use `suggestRelatedUnits()` and the same amber UI chrome.
