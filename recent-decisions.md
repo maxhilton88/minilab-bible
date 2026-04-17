@@ -2530,3 +2530,15 @@ Full end-to-end PWA audit. 34 total fixes:
 **Final count: 26 → 0 errors. `npx tsc --noEmit` exits clean.**
 
 ---
+
+## §Case-Management
+<!-- BM case/task detail sheet: inspection scheduling, field updates, activity logging -->
+
+| ID | Date | Category | One-line summary |
+|----|------|----------|-----------------|
+| D-0710 | 2026-04-17 | feature | Inspection date picker in case detail sheet + activity logging + WhatsApp notify |
+
+**D-0710** (2026-04-17) — Inspection date picker UI on BM case detail sheet.
+- `app/bm/cases/CasesClient.tsx`: Added `inspection_scheduled_at: string | null` to `CaseDetail` interface. Added `updateInspectionDate(dateStr)` async function with optimistic update + rollback. Added "Inspection Scheduled" section (after urgent toggle, before separator) using native `<input type="date">` with `min` set to today + Clear button when date is set.
+- `app/api/bm/cases/[id]/route.ts`: Extended PATCH body type with `inspection_scheduled_at?: string | null`. Writes field to DB via `updates` record. Logs `inspection_scheduled` or `inspection_cleared` activity message. Sends WhatsApp notification to resident when inspection is scheduled (not on clear).
+- Pattern: native `<input type="date">` (no shadcn Calendar installed), immediate save, optimistic UI.
