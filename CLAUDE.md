@@ -1,5 +1,5 @@
 # CLAUDE.md — Minilab Platform
-<!-- Version: V33 · 2026-04-17 -->
+<!-- Version: V34 (closed) · 2026-04-17 -->
 <!-- THIS IS THE ONLY FILE READ AT STARTUP. Everything else is lazy-loaded via the Router. -->
 
 ---
@@ -75,6 +75,7 @@ Match your task to a row. Read only what's listed. If no row matches, you probab
 | PMC portal / multi-building | recent-decisions.md | §PMC-Portal |
 | Onboarding PWA / staff reg | recent-decisions.md | §Onboarding |
 | Console / inbox / messaging | recent-decisions.md | §Console |
+| Unit search / normalization | recent-decisions.md | §Console |
 | Telegram bot / groups / Telethon | recent-decisions.md | §Telegram |
 | Committee portal | recent-decisions.md | §Committee |
 | Procurement / hardware store | recent-decisions.md | §Procurement |
@@ -83,6 +84,10 @@ Match your task to a row. Read only what's listed. If no row matches, you probab
 | MOA architecture / build spec / skills / connectors | MOA-SPEC.md | Full file OK |
 | Resident portal / WhatsApp OTP | recent-decisions.md | §Resident |
 | Supplier / store portal | recent-decisions.md | §Supplier-Store |
+| Data backfill / re-import gaps | recent-decisions.md | §Data-Backfill |
+| TypeScript errors / TS cleanup | recent-decisions.md | §TypeScript-Cleanup |
+| Case / task detail sheet / inspection scheduling | recent-decisions.md | §Case-Management |
+| Staff management / bulk actions / all-staff page | recent-decisions.md | §Staff-Management |
 
 ### Architecture & Code Navigation
 
@@ -112,7 +117,7 @@ Hardware Store: NO inventory system. Telegram orders → invoice billing only.
 
 Technician: A building staff member (role=staff, position=Technician), NOT a contractor_worker.
 
-Face: face-api.js + pgvector, 128-dim descriptors, cosine similarity threshold 0.5, match_face() RPC. No manual clock-in ever. Face IS identity — no name dropdown.
+Face: face-api.js + pgvector, 128-dim descriptors, cosine similarity threshold 0.6, match_face() RPC. No manual clock-in ever. Face IS identity — no name dropdown. One photo = one enrollment (autoEnrollFace utility). No separate FaceEnrollModal.
 
 Attendance: Unlimited in/out pairs per day. Late/early/OT calculated from building_working_hours.
 
@@ -128,6 +133,15 @@ Types: NEVER modify database.types.ts manually — regenerate:
 npx supabase gen types typescript --project-id nncbsumdmsyjjrgdjjea
 
 RPC Caller Rule: When ANY RPC signature changes → grep -r ".rpc('function_name')" --include="*.ts" --include="*.tsx" → update ALL callers in same commit → NOTIFY pgrst 'reload schema'.
+
+TypeScript discipline: `typescript.ignoreBuildErrors` MUST stay false (or absent) in next.config.js. New TS errors must be fixed before commit. If genuinely unavoidable, use `@ts-expect-error` with a comment explaining why. NEVER `@ts-ignore`. NEVER `as any` (except `.from()` on tables not yet in generated types — always with `@ts-expect-error` noting which table and why). NEVER non-null `!` assertions without a prior null check in the same scope.
+Before any commit: `npx tsc --noEmit 2>&1 | grep -c "error TS"` → must return 0. V32d removed ignoreBuildErrors after clearing 108 errors — ZERO errors is the permanent baseline.
+
+Migration discipline: Every migration file MUST be applied to prod in the same session it is created. Verify immediately after apply:
+  SELECT name FROM supabase_migrations.schema_migrations WHERE name LIKE '{number}%';
+If migration contains CREATE POLICY without IF NOT EXISTS, note in closing block that re-execution is unsafe (register-only on re-apply). Closing block MUST confirm migration applied, not just file created.
+
+PMC endpoint rule: All /api/bm/* handlers that call requirePermission() MUST pass req as second arg. check-api-permission.ts throws in dev if PMC session detected without req. Enforced since D-0730. No exceptions within /api/bm/* except /billing/* and /settings/danger/* (those don't use requirePermission at all).
 
 Git: Push to main only. One task = one commit + push. No branches. If push fails: git pull --rebase origin main && git push origin main.
 
@@ -158,36 +172,38 @@ Infra:
 
 ## §7 · Current State
 
-Version: V34 (2026-04-17)
-Database: 178 tables · migrations 001-101 + 077_building_tenancies (applied)
-Pages: 341 · API routes: 568 · Decisions: D-0725 · Portals: 17+
+Version: V34 (closed 2026-04-17)
+Database: 178 tables · migrations 001-102b
+Pages: 341 · API routes: 568 · Decisions: D-0730 latest · Portals: 17+
 Note: 049, 053 DB-only migrations have no repo files (legacy manual, non-blocking)
 
-Active priorities:
-1. Portal routing regression fix — 25 affected (23 cleaners + 2 workers missing user_roles, migration 100 scoped guards-only) — FIX-1A' pending
-2. Guard kiosk face-only enforcement (bible §5 compliance) — FIX-2 pending
-3. Console threads per-user unread wiring — FIX-3 pending
-4. MOA Phase 2 — CHV staff walkthrough recon still pending
+V34 accomplishments:
+- D-0726: Bible catch-up + auto-sync pre-push hook (no more manual sync)
+- D-0727: 23 cleaners unblocked (FIX-1A' backfill + enum + routing fix)
+- D-0728: Face-only clock-in enforced per bible §5 (kiosk + PWA + API)
+- D-0729: Per-user unread_count wired into console threads
+- D-0730: 135-file PMC silent-401 sweep + permission hardening
 
-Pending fixes:
-- FIX-1A' — user_roles backfill (cleaners + workers) + enum value 'cleaning_worker'
-- FIX-1B — remove silent 'bm' default in resolveUser + restore OrgContext fallback
-- FIX-2 — enforce face-only kiosk clock-in (rip manual path)
-- FIX-3 — wire console_read_state into /api/bm/console/threads
-- TypeScript cleanup — remove ignoreBuildErrors, ~92 errors/~19 files (deferred)
-- V32b — S4–S7 floor-3 unit search blindspot (needs device screenshot)
+Next session (V35): AI + MOA deep brainstorm
+Prep audit expected: docs/audits/V34-AI-STACK-AUDIT.md (separate Sonnet run)
+Focus: resident AI reliability, proactive engine design, BM Jarvis vision
+NOT a code session — strategy + architecture only
 
-Key contacts:
-- Seeteng — BM, Lumi Residency (test user)
-- Hoe Zee How — BM, Cyber Heights Villa (next onboarding)
+Active priorities (deferred from V34):
+- FIX-1B — resolveUser silent 'bm' default hardening (defensive, non-urgent)
+- V32b — VMS floor-3 blindspot (needs device screenshot)
+- V32c — GQ ground-floor notation (fold into V32b)
+- MOA Phase 2 — CHV staff walkthrough recon
+
+Key contacts: Seeteng (Lumi, test user), Hoe Zee How (CHV, 712 units, active)
 
 ---
 
 ## §8 · Doc Inventory
 
 docs/startup/ — Working docs (lazy-loaded via §4 Router)
-  actual-schema-columns.md    147KB  Anchored by §Table-{name}
-  recent-decisions.md         341KB  Anchored by §Feature-Area
+  actual-schema-columns.md    148KB  Anchored by §Table-{name}
+  recent-decisions.md         351KB  Anchored by §Feature-Area
   env-required.md             6.4KB  Small — OK to read fully
   GRAPH_REPORT.md             9.8KB  Anchored by §Community / §God-Nodes
 
