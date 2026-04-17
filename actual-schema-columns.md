@@ -315,6 +315,7 @@ work_permit_file_url, fomema_status, fomema_expiry, fomema_file_url, photo_url
 ```
 **NOT present:** `status` (correct is `is_active`)
 **NOTE:** `contractor_org_id` is nullable (dropped NOT NULL in migration 060). Staff can exist without a company — BM creates staff first, links to company later via PUT /api/bm/staff/assign-company (D-0388/D-0389). FK constraint is preserved. Unassigned staff get a building assignment with null contractor_org_id (migration 061) so they appear on the All Staff page.
+**Migration 100 (D-0719):** All contractor_staff with phone now have `user_id` set pointing to a users record. Guards with `role='guard'` also have a `user_roles` entry (role='guard') per building assignment, enabling Telegram login → /app routing. Staff creation API now upserts users record + links user_id on every new contractor_staff create.
 
 ## §Table-contractor_shifts
 ### contractor_shifts (NOT "shifts")
