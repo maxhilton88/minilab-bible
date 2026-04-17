@@ -1,5 +1,5 @@
 # CLAUDE.md — Minilab Platform
-<!-- Version: V34 (closed) · 2026-04-17 -->
+<!-- Version: V35 · 2026-04-18 -->
 <!-- THIS IS THE ONLY FILE READ AT STARTUP. Everything else is lazy-loaded via the Router. -->
 
 ---
@@ -172,9 +172,9 @@ Infra:
 
 ## §7 · Current State
 
-Version: V34 (closed 2026-04-17)
-Database: 178 tables · migrations 001-102b
-Pages: 341 · API routes: 568 · Decisions: D-0730 latest · Portals: 17+
+Version: V35 (open 2026-04-17)
+Database: 178 tables · migrations 001-104
+Pages: 341 · API routes: 568 · Decisions: D-0740 latest · Portals: 17+
 Note: 049, 053 DB-only migrations have no repo files (legacy manual, non-blocking)
 
 V34 accomplishments:
@@ -183,17 +183,42 @@ V34 accomplishments:
 - D-0728: Face-only clock-in enforced per bible §5 (kiosk + PWA + API)
 - D-0729: Per-user unread_count wired into console threads
 - D-0730: 135-file PMC silent-401 sweep + permission hardening
+- D-0731: V34 AI+MOA stack audit — full read-only prep audit for V35 Opus brainstorm
+- D-0732: V35 Behavioral Audit — 8 confirmed bugs with exact file:line root causes
 
-Next session (V35): AI + MOA deep brainstorm
-Prep audit expected: docs/audits/V34-AI-STACK-AUDIT.md (separate Sonnet run)
-Focus: resident AI reliability, proactive engine design, BM Jarvis vision
-NOT a code session — strategy + architecture only
+V35 status: Behavioral audit ✅ DONE — docs/audits/V35-BEHAVIORAL-AUDIT.md
+V35 status: Architecture recon ✅ DONE — docs/audits/V35-ARCHITECTURE-RECON.md (D-0733)
+V35 status: W1 RAG wiring ✅ DONE — Tier 3 now actually retrieves (D-0734)
+V35 status: W2 stateJson injection ✅ DONE — specialist agent now sees resident profile (D-0735)
+V35 status: B1 BM auto-pause ✅ DONE — BM outbound sets 4h TTL, AI silenced (D-0736)
+V35 status: H1 PDF email flow ✅ DONE — PDF URL forwarded, Tier 1 inline approval + ACK (D-0737)
+V35 status: B4 automated sender filter ✅ DONE — bank/robot emails skip AI, message stored (D-0738)
+V35 status: H2B unit hallucination + H2A nudge state ✅ DONE — LLM extracts raw only, substring guard, always-confirm turn, state-aware nudge (D-0739)
+V35 status: Night 1 closeout ✅ DONE — docs synced, V35-NIGHT-1-HANDOFF.md created (D-0740)
+Next V35 action: Phase 1 complete — CHV re-enable blockers all resolved. Next: deploy + CHV sign-off
 
-Active priorities (deferred from V34):
+V35 active priorities (as of 2026-04-18):
+
+✅ All CHV re-enable blockers cleared (W1, W2, B1, H1, B4, H2B+H2A — D-0734 through D-0739)
+
+Next sessions:
+- B3: ai_actions_log table + executor.ts instrumentation (observability)
+- A1: Audit loop at minilab.my/__audit/findings — ai_audit_findings + ai_audit_runs tables + 8 starter rules + superadmin-gated page + 6h cron
+- R1: Staged CHV re-enable (draft-approval mode first via D-0424 infrastructure; then auto on ROUTINE confidence ≥ 0.75; then full)
+
+Deferred (not P0):
+- PDF vision extraction (H1 layer 2 — Gemini can read PDFs)
+- Model migration (Haiku 4.5 for auto-reg or specialist agent — pending CHV traffic evidence)
+- WhatsApp/Telegram automated sender filter (B4 scope was email-only)
+- Orphan file cleanup (5 V3 files + OpenAI embedder.ts + retriever.ts legacy imports)
+- MOA Phase 2 recon (CHV walkthrough — access card + car plate vendor names, Advelsoft skill JSON) — blocker for MOA live
 - FIX-1B — resolveUser silent 'bm' default hardening (defensive, non-urgent)
 - V32b — VMS floor-3 blindspot (needs device screenshot)
 - V32c — GQ ground-floor notation (fold into V32b)
-- MOA Phase 2 — CHV staff walkthrough recon
+
+Open observations for next session:
+- Audit rule design for A1 is a product decision — Opus should design with Max, not ship blind
+- R1 is a morning/daytime operation — not a night ship — Max observes first inbound threads on real CHV traffic
 
 Key contacts: Seeteng (Lumi, test user), Hoe Zee How (CHV, 712 units, active)
 
@@ -214,3 +239,7 @@ docs/ — Archive (touch only when Router points here)
   minilab-ai-agent-architecture.md  34KB  AI deep-dive (for MOA)
   capabilities-map.md          22KB  Feature overview
   docs/audit/                 ~800KB  V3-V14 audit reports (moved here)
+  docs/audits/V34-AI-STACK-AUDIT.md  AI+MOA stack audit for V35 brainstorm (D-0731)
+  docs/audits/V35-BEHAVIORAL-AUDIT.md  8-bug behavioral root cause audit, CHV re-enable prerequisites (D-0732)
+  docs/audits/V35-ARCHITECTURE-RECON.md  AI infrastructure dead code + RAG verdict (D-0733)
+  docs/audits/V35-NIGHT-1-HANDOFF.md  Night 1 session narrative + B3/A1/R1 handoff (D-0740)
