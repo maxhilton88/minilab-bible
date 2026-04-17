@@ -1404,10 +1404,13 @@ CHECK: phone IS NOT NULL OR channel_id IS NOT NULL
 | actions_executed | text[] | YES | | action types array |
 | had_response | boolean | YES | true | |
 | error | text | YES | | |
+| retrieved_chunk_count | integer | YES | | V35-W1: chunks from RAG retrieval (Tier 3 only) |
+| retrieval_duration_ms | integer | YES | | V35-W1: RAG retrieval time inc. timeout |
 | created_at | timestamptz | YES | now() | |
 
 RLS: enabled. Indexes: (building_id, created_at DESC), (intent, created_at DESC).
 View: ai_view_routing_analytics (30-day window).
+Migration 103: added retrieved_chunk_count + retrieval_duration_ms (V35-W1).
 
 ## §Table-contractor_org_building_assignments
 ### contractor_org_building_assignments
