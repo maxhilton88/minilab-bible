@@ -2537,8 +2537,14 @@ Full end-to-end PWA audit. 34 total fixes:
 | ID | Date | Category | One-line summary |
 |----|------|----------|-----------------|
 | D-0710 | 2026-04-17 | feature | Inspection date picker in case detail sheet + activity logging + WhatsApp notify |
+| D-0711 | 2026-04-17 | feature | Staff task detail page shows inspection date + console activity cards wired |
 
 **D-0710** (2026-04-17) — Inspection date picker UI on BM case detail sheet.
 - `app/bm/cases/CasesClient.tsx`: Added `inspection_scheduled_at: string | null` to `CaseDetail` interface. Added `updateInspectionDate(dateStr)` async function with optimistic update + rollback. Added "Inspection Scheduled" section (after urgent toggle, before separator) using native `<input type="date">` with `min` set to today + Clear button when date is set.
 - `app/api/bm/cases/[id]/route.ts`: Extended PATCH body type with `inspection_scheduled_at?: string | null`. Writes field to DB via `updates` record. Logs `inspection_scheduled` or `inspection_cleared` activity message. Sends WhatsApp notification to resident when inspection is scheduled (not on clear).
 - Pattern: native `<input type="date">` (no shadcn Calendar installed), immediate save, optimistic UI.
+
+**D-0711** (2026-04-17) — Staff portal inspection date display + console verification.
+- `app/app/tasks/[id]/page.tsx`: Added `inspection_scheduled_at: string | null` to `CaseDetail` interface. Added Calendar import from lucide-react. Added inspection date row in meta info section (after resolved_at) — renders only when set, using `formatDateTime()` with Calendar icon.
+- Console: `inspection_scheduled` / `inspection_cleared` activity cards already rendered by `CenterTimeline.tsx` (Calendar + Trash2 icons). No changes needed.
+- E2E flow complete: BM sets date → activity in console → staff sees date in /app/tasks/[id].
