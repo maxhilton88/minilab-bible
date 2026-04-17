@@ -2543,6 +2543,7 @@ Full end-to-end PWA audit. 34 total fixes:
 | D-0714 | 2026-04-17 | feature | Calendar button on BM cases overview — opens CalendarScheduleModal, pre-fills inspection date in Create Case dialog |
 | D-0715 | 2026-04-17 | fix | POST route missing inspection activity logging — cases created via Calendar flow now generate Console activity |
 | D-0716 | 2026-04-17 | feature | Calendar inspection overview — dates with booked inspections show blue indicators; click to see list + navigate to case |
+| D-0717 | 2026-04-17 | feature | Case editing capabilities — edit title/description/category/priority, delete case, convert to interfloor |
 
 **D-0710** (2026-04-17) — Inspection date picker UI on BM case detail sheet.
 - `app/bm/cases/CasesClient.tsx`: Added `inspection_scheduled_at: string | null` to `CaseDetail` interface. Added `updateInspectionDate(dateStr)` async function with optimistic update + rollback. Added "Inspection Scheduled" section (after urgent toggle, before separator) using native `<input type="date">` with `min` set to today + Clear button when date is set.
@@ -2570,6 +2571,12 @@ Full end-to-end PWA audit. 34 total fixes:
 - **`app/bm/cases/CasesClient.tsx`** — CreateCaseDialog: Category is now controlled state (`selectedCategory`). Added `interfloor_leak` option. When selected: amber-bordered panel shows "Related Units" multi-select (auto-suggests above/below based on unit_number `-` split + floor ±1), manual add/remove chips, "Schedule same inspection time for all units" checkbox + date+time pickers. Button label dynamically shows "Create N Linked Tasks" when related units are selected. `suggestRelatedUnits()` helper parses unit_number to find above/below units in same block.
 - **`app/api/bm/cases/route.ts`**: POST body extended with `inspection_scheduled_at?` and `related_units?: string[]`. Primary case insert now includes `inspection_scheduled_at`. After primary case created, fire-and-forget loop creates one linked case per related unit — each with `related_case_id` → primary, `related_unit_id` → reporting unit, same inspection time. Multi-unit activity card logged.
 - Pattern: Option B (linked cases), not junction table. Each unit gets its own case in the staff task list. Staff navigate between linked cases individually.
+
+**D-0717** (2026-04-17) — Case editing capabilities in BM case detail sheet.
+- **`app/bm/cases/CasesClient.tsx`**: Added `editMode` + `editFormData` + `moreMenuOpen` state to `CaseDetailSheet`. Added `saveChanges`, `cancelEdit`, `handleDeleteCase`, `convertToInterfloor` functions. Header now shows "Edit" button + custom More menu (⋯) in view mode; Save/Cancel in edit mode. Title becomes `<input>` in edit mode. Editable category (native `<select>`) and priority (`<select>`) shown below badges in edit mode. Description becomes `<Textarea>` in edit mode. Added `onDeleted` prop; parent `handleDeleted` removes case from list + closes sheet.
+- **`app/api/bm/cases/[id]/route.ts`**: Added `DELETE` handler — verifies building ownership, deletes case, logs `case_deleted` activity message.
+- No new schema changes. PATCH already handled all editable fields (title, description, category, priority).
+- Pattern: custom popover (same technique as add-participant dropdown) — no DropdownMenu shadcn component installed.
 
 **D-0716** (2026-04-17) — Calendar inspection overview dashboard.
 - **`app/api/bm/cases/inspections/route.ts`** (new): GET endpoint returning cases with `inspection_scheduled_at` for a given `year`+`month` (1-based). Session-authed via `getBuildingSession` — no buildingId in URL.
