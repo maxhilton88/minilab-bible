@@ -177,6 +177,8 @@ created_at, updated_at
 ```
 **position:** Display job title for staff (Admin, Accounts, Assistant Manager, Technician, Staff). Auth/RLS uses `role` column; `position` is for display only. Added in migration 038.
 **committee_position:** For role=committee only: Chairperson, Secretary, Treasurer, Member. Added in migration 039.
+**user_role_type enum values (22 total, as of migration 102a):** superadmin, bm, staff, committee, contractor_admin, contractor_supervisor, contractor_worker, guard, supplier, resident, owner, tenant, pmc, developer_admin, developer_staff, security_admin, security_supervisor, cleaning_admin, cleaning_supervisor, cleaning_worker *(added 102a, D-0727)*, store_admin, org_admin.
+**Field-staff roles** (route to /app, not org dashboards): guard, cleaning_worker, contractor_worker.
 
 ## §Table-cleaning_logs
 ### cleaning_logs
