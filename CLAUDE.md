@@ -1,5 +1,5 @@
 # CLAUDE.md — Minilab Platform
-<!-- Version: V28 · 2026-04-12 -->
+<!-- Version: V33 · 2026-04-17 -->
 <!-- THIS IS THE ONLY FILE READ AT STARTUP. Everything else is lazy-loaded via the Router. -->
 
 ---
@@ -158,22 +158,26 @@ Infra:
 
 ## §7 · Current State
 
-Version: V28 (2026-04-13)
-Database: ~170 tables · migrations 001-091 (checkout_gate_id on visitors)
-Pages: ~289 · API routes: ~396 · Decisions: D-0650 · Portals: 17+
+Version: V33 (2026-04-17)
+Database: ~176 tables · migrations 001-101 + 077_building_tenancies (applied)
+Pages: ~290 · API routes: ~406 · Decisions: D-0725 · Portals: 17+
+Note: 049, 053 DB-only migrations have no repo files (legacy manual, non-blocking)
 
 Active priorities:
-1. Bug fixes and cleanup pass (pre-MOA)
-2. CHV onboarding (Hoe Zee How, 700+ units) — create security+cleaning orgs, assign to CHV, set geofence; staff walkthrough recon pending
+1. CHV onboarding (Hoe Zee How, 786 units now complete, building_id d98e6bdc-8dfa-4ec6-89af-ed9272e25beb) — 32 corrupted face descriptors DELETED, must re-enroll via browser photo upload (BM All Staff edit modal or onboarding page). 9 guards still unassigned.
 3. E2E testing with Seeteng at Lumi Residency (497c38b5-271d-4316-9580-93096d70038e)
 4. MOA Phase 2 build — Playwright-based universal legacy bridge; 3 systems: Advelsoft (Type 2 cloud RDP, keyboard-first via HTML5 canvas), access card, car plate LPR
 
 Pending fixes:
+- Portal routing regression (D-0719): guards with phone-format mismatch or inactive building assignments get empty contexts → route to /bm/dashboard instead of /app
+- Console read/unread: threads view hardcodes unread_count=0 for all users (audited, fix pending)
 - Guard VMS walk-in: collapse to single-step, white Lucide icons, remove name field
 - DISABLE_DEV_LOGIN=true for production
 - Superadmin PDPA deletion
 - BM staff page dropdown transparency bug
 - MOA-SPEC.md sync to bible repo (docs/startup/)
+- Data canonicalization pass (GS/GC unit_number variants) — D-0689
+- D-0632: canonicalization pass — 6 duplicate CHV norm_keys + GQ G-05/G-5 stored format
 
 Key contacts:
 - Seeteng — BM, Lumi Residency (test user)

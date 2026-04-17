@@ -52,6 +52,18 @@ Multi-session attendance (unlimited in/out pairs per day). Face IS identity — 
 | D-0725 | 2026-04-17 | fix | Contractor staff attendance lookup regression after D-0719: contractor_staff records now have user_id set but contractor_staff_id=null in attendance_logs. Added user_id fallback in get lookup (try contractorStaffId first, then userId). Also added user_id to contractor_staff select in attendance API. No schema change. |
 | D-0724 | 2026-04-17 | fix | PostgreSQL AT TIME ZONE overload bug: `date AT TIME ZONE zone` resolved to timestamptz overload (UTC→local), not timestamp overload (local→UTC). get_attendance_buildings_range + get_attendance_staff_building_range filtered from 08:00 UTC instead of 16:00 UTC (prev day), hiding all morning check-ins (08:00–16:00 KL). Fix: cast p_start_date and (p_end_date + interval '1 day') to ::timestamp before AT TIME ZONE. Migration 101 applied. Verified 5 CHV check-ins now visible. |
 
+**D-0724** (2026-04-17) — PostgreSQL AT TIME ZONE overload fix for attendance RPCs.
+- **Root cause**: In `get_attendance_buildings_range` + `get_attendance_staff_building_range`, the expression `p_start_date AT TIME ZONE 'Asia/Kuala_Lumpur'` resolved to the `timestamptz AT TIME ZONE zone → timestamp` overload (UTC→local direction) instead of the intended `date AT TIME ZONE zone → timestamptz` overload (local→UTC). Result: the range filter started from 08:00 UTC instead of 16:00 UTC (midnight KL = 16:00 UTC previous day), hiding all morning check-ins between 08:00–16:00 KL time.
+- **Fix (migration 101)**: Cast `p_start_date::timestamp` and `(p_end_date + interval '1 day')::timestamp` before AT TIME ZONE. The explicit `::timestamp` cast forces PostgreSQL to use the correct `timestamp AT TIME ZONE zone → timestamptz` overload.
+- **Verified**: 5 CHV check-ins (08:00–15:47 KL) now visible that were previously hidden.
+- **Files**: `supabase/migrations/101_fix_attendance_rpc_timezone.sql` (2 RPCs updated).
+
+**D-0725** (2026-04-17) — Contractor staff attendance lookup fallback after D-0719.
+- **Root cause**: D-0719 migration set `contractor_staff.user_id` for all 36 records. But existing `attendance_logs` rows were created with `contractor_staff_id` only (NULL `user_id`). The attendance get endpoint looked up the contractor_staff record using only `user_id`, failing to find records created before D-0719.
+- **Fix**: Added `user_id` fallback — try `contractor_staff_id` lookup first (existing records), then fall back to `user_id` lookup (new post-D-0719 records). Also added `user_id` to the contractor_staff select in the attendance API so both identifiers are available.
+- **No schema change** — handled at application layer. No migration needed.
+- **Pattern**: Matches the same dual-identifier fallback used for face enrollment lookups.
+
 ### RPC Caller Rule — CRITICAL (D-0347/D-0348)
 Incident: RPC signatures changed but callers not updated → runtime failures in prod.
 **Rule**: When ANY RPC signature changes (new params, renamed params, dropped overloads):
@@ -209,6 +221,22 @@ No exceptions. Applies to all RPCs including attendance, face matching, and any 
 | D-0491 | 2026-04-10 | fix | resolveBuilding: replaced fragile ilike(name) lookup with eq(login_slug) across 3 files (request-otp, forms/[buildingSlug], forms/[buildingSlug]/[templateSlug]). UUID fallback retained. All buildings verified to have login_slug set. CHV launch blocker resolved. |
 | D-0719 | 2026-04-17 | architecture | Contractor staff Telegram login fix: (1) Migration 100 — created users records for all 36 contractor_staff with phone+no user_id, linked contractor_staff.user_id, created 11 guard user_roles entries (role='guard', per building assignment) so buildUserContexts returns BuildingContext → /app routing. (2) handleWorkerContact fallback — when users lookup by phone fails, also checks contractor_staff table; creates users record + links user_id on first contact. (3) build-contexts.ts — guards skip OrgContext creation (mapContractorTypeToRole returned 'security_admin' which beat 'guard' priority and sent guards to /security/dashboard). (4) Staff creation API — contractor staff creation paths (both assigned + unassigned) now upsert users record by phone, set contractor_staff.user_id; guards also get user_roles entry for their building. All new guards will be loginable via Telegram without needing a separate migration. |
 | D-0720 | 2026-04-17 | ux | QR login success message now includes dashboard button. handleQrLogin adds inline_keyboard with role-specific URL via getPortalPath(role, null, true) (isMobile=true — Telegram = phone context). Staff/guard → "📱 Open Staff App" (/app); BM/org admins → "🏢 Open Dashboard" (their portal). Removes friction where user had to return to browser and manually refresh after QR scan. |
+
+**D-0719** (2026-04-17) — Contractor staff Telegram login normalization (migration 100).
+- **Problem**: 36 `contractor_staff` records had no linked `users` record → Telegram login impossible. Guards routed to `/security/dashboard` because `mapContractorTypeToRole(['security'])` returned `'security_admin'` which beat `'guard'` (priority 5 vs 2) in `pickInitialContext`.
+- **Migration 100** (`100_normalize_contractor_staff_to_users.sql`):
+  - Step 1: `INSERT INTO users` for each `contractor_staff` with phone but no `user_id` — `ON CONFLICT (phone) DO NOTHING` preserves pre-existing records.
+  - Step 2: `UPDATE contractor_staff SET user_id` by matching `cs.phone = u.phone`. Silent failure if phone formats differ (e.g. `60xxx` vs `+60xxx`) — see known regression below.
+  - Step 3: `INSERT INTO user_roles (role='guard')` per active `contractor_staff_building_assignments` for guards only. Skipped if `user_id IS NULL` (Step 2 failed) or all assignments `is_active=false`.
+- **`lib/auth/build-contexts.ts`**: Added guard-skip — `if (s.role === 'guard') continue` in contractor_staff loop. Prevents `OrgContext(role='security_admin')` from being created for guards, resolving the /security/dashboard misrouting.
+- **`app/api/auth/telegram/webhook/route.ts` — handleWorkerContact**: Added fallback: if phone not found in `users`, check `contractor_staff` by phone → create `users` record + link `user_id` on first Telegram contact.
+- **Staff creation API**: Both assigned and unassigned contractor staff creation paths now upsert `users` record by phone + set `contractor_staff.user_id`. Guards also get `user_roles` entry for their building. All future guards are Telegram-loginable without migration.
+- **Known regression (D-0719)**: Guards where Step 2 failed (phone format mismatch) AND guards with no active building assignments get empty `contexts[]` in `buildUserContexts`. `resolveUser` defaults to `activeRole = 'bm'` → `/bm/dashboard` on PC QR login. See portal routing audit for full analysis.
+
+**D-0720** (2026-04-17) — QR login success message with direct portal button.
+- **`app/api/auth/telegram/webhook/route.ts` — handleQrLogin**: After Telegram confirms QR scan, sends Telegram message with `inline_keyboard` button linking directly to the user's portal. URL computed via `getPortalPath(role, null, true)` (isMobile=true — Telegram = phone context). Guard/staff → "📱 Open Staff App"; BM/org admin → "🏢 Open Dashboard".
+- **Eliminates**: User having to switch back to browser and wait for poll to complete before seeing redirect. Button allows direct deep-link from Telegram.
+- **Note**: D-0720 in git commit history refers to bulk delete (§Staff-Management). This UX change was bundled with D-0719 auth work; table entry here documents the feature independently.
 
 ### PERMANENT Portal Routing (D-0370)
 ---
