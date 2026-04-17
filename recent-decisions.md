@@ -2289,6 +2289,18 @@ Investigated and confirmed: code is already correct. All 14 `/api/onboard/*` rou
 
 ---
 
+### D-0726 — Bible Catch-Up to V34 + Husky Auto-Sync Pre-Push Hook
+
+- Bible `docs/startup/CLAUDE.md` §7 updated: V34, 178 tables, 341 pages, 568 API routes, D-0725, revised active priorities (FIX-1A'/FIX-1B portal routing, FIX-2 face kiosk, FIX-3 console unread, MOA Phase 2 recon) and pending fixes list.
+- Bible §8 Doc Inventory file sizes corrected (147KB schema, 341KB decisions).
+- Bible §6 + main CLAUDE.md §6 step 10: replaced manual `cd docs/startup && git commit && git push` with "automatic via .husky/pre-push".
+- `docs/decisions.log`: deprecation note added — historical archive D-0001–D-0668 only; all new decisions go to `recent-decisions.md`.
+- `.husky/pre-push`: fail-soft hook that auto-commits and pushes `docs/startup/` to the bible repo on every main app push. No-op when bible is clean. Never blocks main push on bible failure.
+- `.husky/pre-commit`: cleared default jest stub (no local test runner).
+- `package.json`: husky added as devDependency.
+
+**Modified:** `CLAUDE.md`, `docs/startup/CLAUDE.md`, `docs/decisions.log`, `.husky/pre-push` (new), `.husky/pre-commit` (new), `package.json`, `package-lock.json`
+
 ---
 
 ## §Schema-Migration
