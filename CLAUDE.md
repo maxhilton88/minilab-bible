@@ -152,32 +152,30 @@ Infra:
 7. GRAPH: If major architectural change → update docs/startup/graph-report.md.
 8. LIST files changed.
 9. COMMIT with prefix (feat: | fix: | docs: | refactor: | chore:) and push to main.
-10. SYNC BIBLE: cd docs/startup && git add -A && git commit -m "bible: sync V{XX}" && git push origin main && cd ../..
+10. SYNC BIBLE: automatic via .husky/pre-push on git push. Ensure bible §7 Current State is updated when counts change (version, tables, pages, routes, decisions).
 
 ---
 
 ## §7 · Current State
 
-Version: V33 (2026-04-17)
-Database: ~176 tables · migrations 001-101 + 077_building_tenancies (applied)
-Pages: ~290 · API routes: ~406 · Decisions: D-0725 · Portals: 17+
+Version: V34 (2026-04-17)
+Database: 178 tables · migrations 001-101 + 077_building_tenancies (applied)
+Pages: 341 · API routes: 568 · Decisions: D-0725 · Portals: 17+
 Note: 049, 053 DB-only migrations have no repo files (legacy manual, non-blocking)
 
 Active priorities:
-1. CHV onboarding (Hoe Zee How, 786 units now complete, building_id d98e6bdc-8dfa-4ec6-89af-ed9272e25beb) — 32 corrupted face descriptors DELETED, must re-enroll via browser photo upload (BM All Staff edit modal or onboarding page). 9 guards still unassigned.
-3. E2E testing with Seeteng at Lumi Residency (497c38b5-271d-4316-9580-93096d70038e)
-4. MOA Phase 2 build — Playwright-based universal legacy bridge; 3 systems: Advelsoft (Type 2 cloud RDP, keyboard-first via HTML5 canvas), access card, car plate LPR
+1. Portal routing regression fix — 25 affected (23 cleaners + 2 workers missing user_roles, migration 100 scoped guards-only) — FIX-1A' pending
+2. Guard kiosk face-only enforcement (bible §5 compliance) — FIX-2 pending
+3. Console threads per-user unread wiring — FIX-3 pending
+4. MOA Phase 2 — CHV staff walkthrough recon still pending
 
 Pending fixes:
-- Portal routing regression (D-0719): guards with phone-format mismatch or inactive building assignments get empty contexts → route to /bm/dashboard instead of /app
-- Console read/unread: threads view hardcodes unread_count=0 for all users (audited, fix pending)
-- Guard VMS walk-in: collapse to single-step, white Lucide icons, remove name field
-- DISABLE_DEV_LOGIN=true for production
-- Superadmin PDPA deletion
-- BM staff page dropdown transparency bug
-- MOA-SPEC.md sync to bible repo (docs/startup/)
-- Data canonicalization pass (GS/GC unit_number variants) — D-0689
-- D-0632: canonicalization pass — 6 duplicate CHV norm_keys + GQ G-05/G-5 stored format
+- FIX-1A' — user_roles backfill (cleaners + workers) + enum value 'cleaning_worker'
+- FIX-1B — remove silent 'bm' default in resolveUser + restore OrgContext fallback
+- FIX-2 — enforce face-only kiosk clock-in (rip manual path)
+- FIX-3 — wire console_read_state into /api/bm/console/threads
+- TypeScript cleanup — remove ignoreBuildErrors, ~92 errors/~19 files (deferred)
+- V32b — S4–S7 floor-3 unit search blindspot (needs device screenshot)
 
 Key contacts:
 - Seeteng — BM, Lumi Residency (test user)
@@ -188,13 +186,13 @@ Key contacts:
 ## §8 · Doc Inventory
 
 docs/startup/ — Working docs (lazy-loaded via §4 Router)
-  actual-schema-columns.md    126KB  Anchored by §Table-{name}
-  recent-decisions.md         187KB  Anchored by §Feature-Area
-  env-required.md               7KB  Small — OK to read fully
-  GRAPH_REPORT.md             ~10KB  Anchored by §Community / §God-Nodes
+  actual-schema-columns.md    147KB  Anchored by §Table-{name}
+  recent-decisions.md         341KB  Anchored by §Feature-Area
+  env-required.md             6.4KB  Small — OK to read fully
+  GRAPH_REPORT.md             9.8KB  Anchored by §Community / §God-Nodes
 
 docs/ — Archive (touch only when Router points here)
-  decisions.log               429KB  Raw D-0001+ (not anchored)
+  decisions.log               DEPRECATED — historical D-0001 through D-0668 only (see top of file)
   session-context.md           35KB  Legacy (superseded by §7)
   SESSION-SOP.md               13KB  Legacy (superseded by §2+§6)
   minilab-ai-agent-architecture.md  34KB  AI deep-dive (for MOA)
