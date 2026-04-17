@@ -224,6 +224,7 @@ No exceptions. Applies to all RPCs including attendance, face matching, and any 
 | D-0719 | 2026-04-17 | architecture | Contractor staff Telegram login fix: (1) Migration 100 — created users records for all 36 contractor_staff with phone+no user_id, linked contractor_staff.user_id, created 11 guard user_roles entries (role='guard', per building assignment) so buildUserContexts returns BuildingContext → /app routing. (2) handleWorkerContact fallback — when users lookup by phone fails, also checks contractor_staff table; creates users record + links user_id on first contact. (3) build-contexts.ts — guards skip OrgContext creation (mapContractorTypeToRole returned 'security_admin' which beat 'guard' priority and sent guards to /security/dashboard). (4) Staff creation API — contractor staff creation paths (both assigned + unassigned) now upsert users record by phone, set contractor_staff.user_id; guards also get user_roles entry for their building. All new guards will be loginable via Telegram without needing a separate migration. |
 | D-0720 | 2026-04-17 | ux | QR login success message now includes dashboard button. handleQrLogin adds inline_keyboard with role-specific URL via getPortalPath(role, null, true) (isMobile=true — Telegram = phone context). Staff/guard → "📱 Open Staff App" (/app); BM/org admins → "🏢 Open Dashboard" (their portal). Removes friction where user had to return to browser and manually refresh after QR scan. |
 | D-0727 | 2026-04-17 | fix | FIX-1A': Backfill user_roles for 23 cleaners blocked post-D-0719. Root causes: (1) migration 100 scoped guard only — cleaners had no user_roles → buildUserContexts created OrgContext(cleaning_admin) which beat no BuildingContext → /cleaning/dashboard. (2) cleaning_worker and contractor_worker were misplaced in ORG ADMINS section of get-portal-path.ts → routed to org dashboards on all devices. Fixes: 102a adds cleaning_worker enum; 102b backfills 23 cleaners → cleaning_worker in user_roles; get-portal-path.ts moves both field-staff roles to /app; build-contexts.ts extends guard-skip to cleaner; session.ts adds cleaning_worker: 3 to ROLE_PRIORITY. |
+| D-0730 | 2026-04-17 | fix | PMC silent-401 mass fix: added req to requirePermission() in all 135 /api/bm/* handlers that were missing it. Hardened check-api-permission.ts to throw in dev / structured-log+401 in prod when PMC session detected without req. Fixed _req→req rename in 10 handlers. 0 TS errors. Closes 6+ months of silent PMC access failures across every feature area except console (not yet in PMC portal). |
 
 **D-0719** (2026-04-17) — Contractor staff Telegram login normalization (migration 100).
 - **Problem**: 36 `contractor_staff` records had no linked `users` record → Telegram login impossible. Guards routed to `/security/dashboard` because `mapContractorTypeToRole(['security'])` returned `'security_admin'` which beat `'guard'` (priority 5 vs 2) in `pickInitialContext`.
@@ -249,6 +250,27 @@ No exceptions. Applies to all RPCs including attendance, face matching, and any 
 - **`lib/auth/build-contexts.ts`**: Extended guard-skip from `['guard']` to `['guard', 'cleaner']` — cleaners no longer generate `OrgContext(role='cleaning_admin')`.
 - **`lib/auth/session.ts`**: Added `cleaning_worker: 3` to `ROLE_PRIORITY` (peer of `contractor_worker: 3`). Comment updated.
 - **Workers (2)**: Already had correct `user_roles` entries — untouched. `worker` excluded from guard-skip (their OrgContext path untested — revisit if broken).
+
+**D-0730** (2026-04-17) — PMC silent-401 full sweep: all /api/bm/* requirePermission callers now pass req.
+
+- **Root cause**: `requirePermission(permission, req?)` reads `x-building-id` from `req.headers` for PMC role resolution. 135 out of 156 /api/bm/* route handlers were calling `requirePermission('foo.bar')` without the second arg. PMC sessions received silent 401 "Unauthorized: PMC requires x-building-id header" on every such endpoint — even though the client sent the header correctly. Bug existed since D-0387 (2026-04-06) introduced PMC access.
+
+- **Discovery**: grep audit classified all callers into Bucket A (21 files, already correct), Bucket B (135 files, broken), Bucket C (session-only, out of scope). User-visible broken endpoints included `/api/bm/residents`, `/api/bm/units`, `/api/bm/settings/profile` plus all 38 console/* routes (latent — console not yet in PMC portal).
+
+- **Fix — Part B** (135 files): Added `, req` to every `requirePermission(permission)` call. Handled edge cases: (1) 17 handlers had empty `method()` signatures with no `req` param — signatures updated to `method(req: NextRequest)`; (2) 12 files had no `NextRequest` import — import added; (3) 10 handlers used `_req` (unused-param convention) — renamed to `req` since param is now used.
+
+- **Fix — Part C** (`lib/rbac/check-api-permission.ts`): Hardening added at PMC branch:
+  - **Dev**: throws `Error` immediately with actionable message naming the permission and fix.
+  - **Prod**: `console.error('[PMC-AUTH-BUG]', { permission, userId })` then returns 401 (fail closed).
+  - Non-PMC roles untouched.
+
+- **Exceptions** (none in scope): `/api/bm/billing/*` and `/api/bm/settings/danger/*` don't use `requirePermission` at all — no change needed.
+
+- **CLAUDE.md §5 rule added**: "All /api/bm/* handlers that call requirePermission() MUST pass req as second arg."
+
+- **Verification**: `npx tsc --noEmit` → 0 errors. `grep -rn "requirePermission(" app/api/bm/ | grep -v "import\|//" | grep -v ", req)"` → empty.
+
+- **Files changed**: `lib/rbac/check-api-permission.ts` (hardening) + 145 route files (135 Bucket B + 10 _req renames).
 
 ### PERMANENT Portal Routing (D-0370)
 ---
@@ -625,6 +647,7 @@ VMS FLOW AUDIT REPORT
 | D-0375 | 2026-04-06 | fix | Org portal phase 2 — PMC + cleaning gaps: (1) lib/pmc/helpers.ts created with getPmcOrgForUser() — resolves PMC org name via user_roles→building_org_assignments→organisations; (2) PMC layout updated to show real org name (was hard-coded "PMC Portal"); (3) cleaning/attendance page + API created (mirrors security attendance — date range, building filter, CSV export, summary stats); (4) cleaning layout gains Attendance nav item; (5) PMC staff page gains "Assign to Building" dialog (UserPlus icon per staff, building picker from /api/pmc/buildings connected list, role picker, calls PATCH assign). PMC model is portfolio-level — no per-page building switcher needed. |
 | D-0387 | 2026-04-06 | feature | PMC full access portal (Option A): verifyPmcBuildingAccess + getBuildingSession + requirePermission(req). 20+ BM API routes updated. 15 new /pmc/buildings/[buildingId]/* pages. PMC ~98%. |
 | D-0387 | 2026-04-06 | feature | PMC full access portal (Option A): PMC users get BM-level access to assigned buildings via x-building-id header pattern. New lib/pmc/verify-access.ts (verifyPmcBuildingAccess: user_roles→building_org_assignments chain). New lib/rbac/get-building-session.ts (getBuildingSession: BM uses session.buildingId, PMC reads x-building-id + org verify). requirePermission() extended with optional req?: NextRequest — reads x-building-id, verifies PMC org assignment, grants full access. OrgShell extended with buildingNavSections prop + :buildingId placeholder substitution. PMC layout gains PMC_BUILDING_SECTIONS (6 sections, 15 items). app/pmc/buildings/[buildingId]/layout.tsx server guard (redirects if no access). 20+ BM API routes updated (GET→getBuildingSession, writes→requirePermission+req): dashboard, cases, cases/[id], staff, units, maintenance, assets, documents, announcements, announcements/[id], residents, leave, fines, settings/profile, collection, collection/transactions, reports/attendance, reports/collections. 15 PMC building pages created at /pmc/buildings/[buildingId]/{dashboard,cases,staff,units,residents,attendance,finance,maintenance,assets,documents,announcements,reports,settings,leave,fines}. |
+| D-0730 | 2026-04-17 | fix | PMC silent-401 mass fix: 135 /api/bm/* handlers were calling requirePermission() without passing req — PMC always received 401 even with correct x-building-id header. All 135 fixed. Dev-time throw + prod structured log added to check-api-permission.ts. Affected: residents, units, settings/profile (user-visible today) + all console/*, agm/*, collection/*, legal/*, reports/*, settings/*, procurement/*, whatsapp/*, etc. (latent — PMC portal pages not yet wired). See §Auth-Routing D-0730 for full detail. |
 
 ## D-0387 — PMC full access portal — Option A (2026-04-06)
 
