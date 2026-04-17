@@ -665,7 +665,8 @@ user_id (UUID FK→users), resident_id (UUID FK→residents),
 state_json (JSONB NOT NULL DEFAULT '{}'),
 version (INTEGER NOT NULL DEFAULT 0),
 last_inbound_at (TIMESTAMPTZ),
-ai_paused (BOOLEAN NOT NULL DEFAULT false),  -- D-0453 migration 067
+ai_paused (BOOLEAN NOT NULL DEFAULT false),  -- D-0453 migration 067 — manual pause (BM toggle, no TTL)
+ai_paused_until (TIMESTAMPTZ),  -- D-0736 migration 104 — auto-pause TTL (set by BM outbound, clears after 4h)
 display_name (TEXT),  -- D-0455 migration 068 — shown in console Contact view
 classification (TEXT NOT NULL DEFAULT 'unknown'),  -- D-0455 migration 068 — unknown/saved/external/resident
 company (TEXT),  -- D-0480 migration 069 — company/label for external contacts

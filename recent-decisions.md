@@ -1558,6 +1558,29 @@ Additionally, the SW CACHE_NAME is `minilab-v2` — unchanged across all 7 fix a
 
 ---
 
+### D-0736 — B1: BM auto-pause AI on console outbound (4h TTL)
+**Root cause:** V35-BEHAVIORAL-AUDIT §H3 — BM outbound via direct-message or send routes never set `ai_paused`; AI remained active and could fire on the resident's next inbound, talking over the BM's manual intervention. Real case: HZH manually corrected Lady N's registration at 04:39pm; resident replied "Ok tq" next day; AI had no awareness BM had taken over.
+
+**Fix:**
+- New column `sender_profiles.ai_paused_until TIMESTAMPTZ` (migration 104). Distinct from `ai_paused` boolean (manual, no TTL).
+- `direct-message/route.ts` + `send/route.ts`: after successful outbound delivery, fire-and-forget sets `ai_paused_until = now + 4h`. Internal notes (`channel = internal_note`) are excluded — BM↔BM only.
+- `ai-pause-check.ts`: extended to check `ai_paused_until` in all three lookup paths (phone, telegram_id, senderProfileId). New reason: `bm_takeover_auto_pause` (distinct from `ai_paused` for manual pause).
+- `ai-pause/route.ts`: POST resume (`paused=false`) now also clears `ai_paused_until = null`. GET returns `paused_until` alongside `paused`.
+- `contacts/route.ts`: returns `ai_paused_until` in contact list. `console-shared.tsx` / `ContactListItem` updated.
+- `page.tsx`: `aiPausedUntil` state + optimistic update after send + `handleToggleAiPause` uses `aiEffectivelyPaused` (manual OR auto-pause active).
+- `CenterTimeline.tsx`: new blue "Auto-pause" badge with clock icon (only when auto-pause active and no manual pause). Button shows "Resume AI" / "Pause AI" based on effective pause state.
+
+**Trade-offs:**
+- Resident may get silence for up to 4h after BM intervenes. Intentional — BM can manually resume if they want AI sooner.
+- TTL is hardcoded at 4h (can tune later from audit data).
+- Fire-and-forget: if update fails, DB doesn't set TTL but UI shows optimistic state. Acceptable — the miss is transient.
+
+**Cross-ref:** §AI-Pipeline — `bm_takeover_auto_pause` is now a distinct skip reason from `ai_paused`/`sender_paused`.
+
+**Files:** `supabase/migrations/104_ai_paused_ttl.sql`, `lib/ai/ai-pause-check.ts`, `app/api/bm/console/direct-message/route.ts`, `app/api/bm/console/send/route.ts`, `app/api/bm/console/ai-pause/route.ts`, `app/api/bm/console/contacts/route.ts`, `components/bm/console/console-shared.tsx`, `app/bm/console/page.tsx`, `components/bm/console/CenterTimeline.tsx`, `packages/shared/types/database.types.ts`
+
+---
+
 ## §Telegram
 <!-- Telegram bot, groups, Telethon microservice, auto-groups, bot login -->
 
