@@ -1450,6 +1450,19 @@ Additionally, the SW CACHE_NAME is `minilab-v2` — unchanged across all 7 fix a
 
 ---
 
+### D-0709 — Inspection scheduling + activity logging gaps (V33, 2026-04-17)
+**Date:** 2026-04-17
+**Context:** Adding inspection scheduling to case management. Fixing two gaps where case mutations weren't logged to the Console activity channel.
+**Decisions:**
+1. **Migration 098:** Added `inspection_scheduled_at` (TIMESTAMPTZ nullable) to `cases` table with partial index. New activity types for this: `inspection_scheduled` + `inspection_cleared` (rendered in CenterTimeline with Calendar/Trash2 icons).
+2. **Gap fix — resident case creation:** `app/api/resident/cases/route.ts` — was calling `applyAutoParticipants` but never logging `case_created` activity. Now calls `insertActivityMessage` with action `case_created` after INSERT, before auto-participants.
+3. **Gap fix — participant mutations:** `app/api/bm/cases/[id]/participants/route.ts` — POST upsert now logs `participant_added` with user_name + role in metadata. Added missing DELETE handler that logs `participant_removed`. Both fetch case `unit_id`/`resident_id` for full activity context.
+4. **Console renderer:** `CenterTimeline.tsx` `ActivityCard.iconMap` extended with `inspection_scheduled` (Calendar), `inspection_cleared` (Trash2), `participant_added` (UserPlus), `participant_removed` (UserMinus).
+5. **CLAUDE.md §5:** TypeScript discipline rule extended with verification command: `npx tsc --noEmit 2>&1 | grep -c "error TS"` → must return 0. V32d removed ignoreBuildErrors after clearing 108 errors — ZERO errors is the permanent baseline.
+**Files:** `supabase/migrations/098_inspection_scheduling.sql`, `app/api/resident/cases/route.ts`, `app/api/bm/cases/[id]/participants/route.ts`, `components/bm/console/CenterTimeline.tsx`, `lib/supabase/database.types.ts`, `CLAUDE.md`
+
+---
+
 ## §Telegram
 <!-- Telegram bot, groups, Telethon microservice, auto-groups, bot login -->
 

@@ -206,11 +206,13 @@ category (enum: case_category_type), status (enum: case_status_type),
 priority, is_urgent, resident_id, unit_id, assigned_to,
 assigned_contractor_org_id, ai_intent, ai_summary, source_message_id,
 sender_profile_id (uuid, FK → sender_profiles),
-sla_due_at, resolved_at, created_at, updated_at
+sla_due_at, resolved_at, created_at, updated_at,
+inspection_scheduled_at (TIMESTAMPTZ nullable)
 ```
 **NOT present:** `reported_by` (correct name is `resident_id`), `case_number` is REQUIRED
 **Migration 079:** Added sender_profile_id (UUID FK → sender_profiles) — links handoff cases to unregistered contacts. Added 'ai_handoff' to case_category_type enum (D-0590).
 **Migration 081:** Added related_unit_id (UUID FK → units, indexed) — for interfloor leak cases linking affected/source unit. Added 'interfloor_leak' to case_category_type enum (D-0600).
+**Migration 098:** Added inspection_scheduled_at (TIMESTAMPTZ nullable, partial index). D-0709.
 
 ## §Table-case_participants
 ### case_participants
