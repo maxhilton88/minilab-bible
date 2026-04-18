@@ -64,7 +64,7 @@ access_card_logs | access_cards | agm_cards | agm_egm_meetings | agm_eligible | 
 | suppliers | 0 | purchase_orders | 0* |
 | po_line_items | 0* | defects | 0* |
 | pmc_orgs | 0* | developer_orgs | 0 |
-| platform_settings | 1 | telegram_groups | 0 |
+| platform_settings | 1 | telegram_group_settings | 0 |
 | documents | 0 | invoices | 0 |
 | sender_profiles | 0 | chase_loops | 0 |
 | daily_reports | 0 | conversations | 0 |
@@ -1412,7 +1412,7 @@ CHECK: phone IS NOT NULL OR channel_id IS NOT NULL
 | message_id | uuid | YES | | FK→messages ON DELETE SET NULL |
 | sender_profile_id | uuid | YES | | FK→sender_profiles ON DELETE SET NULL |
 | resident_id | uuid | YES | | FK→residents ON DELETE SET NULL |
-| sender_ref | text | YES | | phone / telegram_user_id / email (pre-reg tracking) |
+| sender_ref | text | YES | | phone / telegram_id / email (pre-reg tracking) |
 | sender_ref_type | text | YES | | 'phone' \| 'telegram_id' \| 'email' |
 | channel | text | NO | | 'whatsapp' \| 'telegram' \| 'email' \| 'web_chat' |
 | entry_point | text | NO | | 'wa_webhook' \| 'tg_webhook_path1' \| 'tg_webhook_path2' \| 'bm_chat_background' \| 'email_processor' \| 'auto_register' \| 'nudge_cron' |
