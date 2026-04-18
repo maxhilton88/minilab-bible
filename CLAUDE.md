@@ -173,8 +173,8 @@ Infra:
 ## §7 · Current State
 
 Version: V35 (open 2026-04-17)
-Database: 178 tables · migrations 001-104
-Pages: 341 · API routes: 568 · Decisions: D-0740 latest · Portals: 17+
+Database: 180 tables · migrations 001-105
+Pages: 341 · API routes: 568 · Decisions: D-0742 latest · Portals: 17+
 Note: 049, 053 DB-only migrations have no repo files (legacy manual, non-blocking)
 
 V34 accomplishments:
@@ -195,14 +195,15 @@ V35 status: H1 PDF email flow ✅ DONE — PDF URL forwarded, Tier 1 inline appr
 V35 status: B4 automated sender filter ✅ DONE — bank/robot emails skip AI, message stored (D-0738)
 V35 status: H2B unit hallucination + H2A nudge state ✅ DONE — LLM extracts raw only, substring guard, always-confirm turn, state-aware nudge (D-0739)
 V35 status: Night 1 closeout ✅ DONE — docs synced, V35-NIGHT-1-HANDOFF.md created (D-0740)
-Next V35 action: Phase 1 complete — CHV re-enable blockers all resolved. Next: deploy + CHV sign-off
+V35 status: B3 AI pipeline observability ✅ DONE — ai_pipeline_runs + ai_actions_log + full entry-point instrumentation (D-0742)
+Next V35 action: B3 complete. Next: A1 (audit loop) or R1 (staged CHV re-enable)
 
 V35 active priorities (as of 2026-04-18):
 
 ✅ All CHV re-enable blockers cleared (W1, W2, B1, H1, B4, H2B+H2A — D-0734 through D-0739)
+✅ B3 AI observability shipped (D-0742) — every pipeline invocation now durably logged
 
 Next sessions:
-- B3: ai_actions_log table + executor.ts instrumentation (observability)
 - A1: Audit loop at minilab.my/__audit/findings — ai_audit_findings + ai_audit_runs tables + 8 starter rules + superadmin-gated page + 6h cron
 - R1: Staged CHV re-enable (draft-approval mode first via D-0424 infrastructure; then auto on ROUTINE confidence ≥ 0.75; then full)
 

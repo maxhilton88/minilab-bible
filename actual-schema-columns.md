@@ -1387,6 +1387,67 @@ Actively used for attendance clock-in/out validation (D-0373). Enforced when is_
 
 CHECK: phone IS NOT NULL OR channel_id IS NOT NULL
 
+## §Table-ai_pipeline_runs
+### ai_pipeline_runs
+
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| id | uuid | NO | gen_random_uuid() | PK |
+| created_at | timestamptz | NO | now() | |
+| building_id | uuid | NO | | FK→buildings ON DELETE CASCADE |
+| message_id | uuid | YES | | FK→messages ON DELETE SET NULL |
+| sender_profile_id | uuid | YES | | FK→sender_profiles ON DELETE SET NULL |
+| resident_id | uuid | YES | | FK→residents ON DELETE SET NULL |
+| sender_ref | text | YES | | phone / telegram_user_id / email (pre-reg tracking) |
+| sender_ref_type | text | YES | | 'phone' \| 'telegram_id' \| 'email' |
+| channel | text | NO | | 'whatsapp' \| 'telegram' \| 'email' \| 'web_chat' |
+| entry_point | text | NO | | 'wa_webhook' \| 'tg_webhook_path1' \| 'tg_webhook_path2' \| 'bm_chat_background' \| 'email_processor' \| 'auto_register' \| 'nudge_cron' |
+| tier | int | YES | | 1-4 (null if skipped before pipeline) |
+| handler | text | YES | | e.g. direct_balance_check |
+| intent | text | YES | | e.g. MAINTENANCE_COMPLAINT |
+| confidence | numeric(4,3) | YES | | 0.000-1.000 |
+| had_response | boolean | YES | | true if AI sent reply |
+| skip_reason | text | YES | | see SKIP_REASONS enum in pipeline-run-logger.ts |
+| skip_reason_meta | jsonb | YES | | extra context for skip (PII may be present) |
+| classifier_ms | int | YES | | classifier latency |
+| rag_ms | int | YES | | RAG retrieval latency |
+| specialist_ms | int | YES | | specialist agent latency |
+| total_ms | int | YES | | end-to-end pipeline latency |
+| prompt_tokens | int | YES | | total input tokens across all LLM calls |
+| completion_tokens | int | YES | | total output tokens across all LLM calls |
+| model_used | text | YES | | primary model (deepseek-chat / claude-sonnet-*) |
+| is_auto_reg | boolean | NO | false | true if entry via auto-registration flow |
+| auto_reg_step | text | YES | | 'initial' \| 'awaiting_unit_confirmation' \| 'confirmed' \| 'hallucination_retry' \| ... |
+| error_text | text | YES | | error message if pipeline threw (PII may be present) |
+| logger_version | int | NO | 1 | bump in pipeline-run-logger.ts when contract changes |
+| extra_meta | jsonb | YES | | forward-compat catch-all |
+
+RLS: enabled. Superadmin all, BM read (has_building_access), service insert (true).
+Indexes: (building_id, created_at DESC), (message_id) partial, (building_id, skip_reason, created_at DESC) partial, (building_id, created_at DESC) where is_auto_reg=true, (sender_ref, sender_ref_type, created_at DESC) partial.
+View: ai_view_ai_pipeline_runs (excludes sender_ref, skip_reason_meta, error_text, extra_meta).
+Migration 105: created (V35-B3).
+
+## §Table-ai_actions_log
+### ai_actions_log
+
+| Column | Type | Nullable | Default | Notes |
+|--------|------|----------|---------|-------|
+| id | uuid | NO | gen_random_uuid() | PK |
+| created_at | timestamptz | NO | now() | |
+| pipeline_run_id | uuid | NO | | FK→ai_pipeline_runs ON DELETE CASCADE |
+| building_id | uuid | NO | | FK→buildings ON DELETE CASCADE (denorm for RLS) |
+| action_type | text | NO | | e.g. create_payment_approval, send_message |
+| action_index | int | NO | | 0-based order within pipeline run |
+| success | boolean | NO | | true if action succeeded |
+| data | jsonb | YES | | action payload (may contain PII) |
+| error | text | YES | | error message if action failed |
+| extra_meta | jsonb | YES | | forward-compat catch-all |
+
+RLS: enabled. Superadmin all, BM read (has_building_access), service insert (true).
+Indexes: (pipeline_run_id), (building_id, action_type, created_at DESC), (building_id, created_at DESC) where success=false.
+View: ai_view_ai_actions_log (excludes data, error, extra_meta).
+Migration 105: created (V35-B3).
+
 ## §Table-routing_analytics
 ### routing_analytics
 
@@ -1407,11 +1468,13 @@ CHECK: phone IS NOT NULL OR channel_id IS NOT NULL
 | error | text | YES | | |
 | retrieved_chunk_count | integer | YES | | V35-W1: chunks from RAG retrieval (Tier 3 only) |
 | retrieval_duration_ms | integer | YES | | V35-W1: RAG retrieval time inc. timeout |
+| pipeline_run_id | uuid | YES | | FK→ai_pipeline_runs (B3 correlation ID) |
 | created_at | timestamptz | YES | now() | |
 
-RLS: enabled. Indexes: (building_id, created_at DESC), (intent, created_at DESC).
+RLS: enabled. Indexes: (building_id, created_at DESC), (intent, created_at DESC), (pipeline_run_id) partial.
 View: ai_view_routing_analytics (30-day window).
 Migration 103: added retrieved_chunk_count + retrieval_duration_ms (V35-W1).
+Migration 105: added pipeline_run_id FK (V35-B3).
 
 ## §Table-contractor_org_building_assignments
 ### contractor_org_building_assignments
