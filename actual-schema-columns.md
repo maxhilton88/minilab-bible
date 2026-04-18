@@ -173,10 +173,13 @@ last_read_at (TIMESTAMPTZ NOT NULL DEFAULT now())
 ```
 id, user_id, building_id, role (enum: user_role_type), position (text),
 committee_position (text), is_primary_building, assigned_at, assigned_by, revoked_at,
-created_at, updated_at
+created_at, updated_at,
+last_template_applied_name (text), last_template_applied_at (timestamptz),
+last_template_applied_by (uuid, no FK — allows sentinel)
 ```
 **position:** Display job title for staff (Admin, Accounts, Assistant Manager, Technician, Staff). Auth/RLS uses `role` column; `position` is for display only. Added in migration 038.
 **committee_position:** For role=committee only: Chairperson, Secretary, Treasurer, Member. Added in migration 039.
+**last_template_applied_name/at/by:** Permission template audit trail (migration 107, D-0748). Written by `applyRoleTemplate` on every template apply. `last_template_applied_by` stores real actor UUID or sentinel `00000000-0000-0000-0000-000000000001` for system backfills. No FK constraint — allows sentinel. Staff with null `last_template_applied_at` AND zero permissions = drift incident. Partial index `idx_user_roles_no_template` on (role, position) WHERE role='staff' AND last_template_applied_at IS NULL.
 **user_role_type enum values (22 total, as of migration 102a):** superadmin, bm, staff, committee, contractor_admin, contractor_supervisor, contractor_worker, guard, supplier, resident, owner, tenant, pmc, developer_admin, developer_staff, security_admin, security_supervisor, cleaning_admin, cleaning_supervisor, cleaning_worker *(added 102a, D-0727)*, store_admin, org_admin.
 **Field-staff roles** (route to /app, not org dashboards): guard, cleaning_worker, contractor_worker.
 
