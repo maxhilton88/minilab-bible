@@ -224,6 +224,24 @@ No exceptions. Applies to all RPCs including attendance, face matching, and any 
 - **18 AI Database Views**: PostgreSQL views strip PII, pre-join useful data, scope by building_id. Generic_read now reads views instead of raw tables. Views: ai_view_staff, residents, contractors, tasks, facilities, announcements, patrol, visitors, collection, petty_cash, credits, documents, insurance, renovation, telegram_groups, attendance, bookings, tenders.
 - **Gap Engine**: building_gaps table + daily scanner (6 gap types: no-telegram, no-face, stale-tasks, low-credits, expiring-compliance, incomplete-setup). Upsert-based dedup, auto-resolve, consolidated Telegram notifications. Dashboard widget + /bm/gaps page + AI handler.
 
+### Permanent rules (append only — never remove)
+
+- **R2 retention policy:** `docs/ops/R2-RETENTION-POLICY.md` is source of truth. Any new R2 prefix added by a feature MUST be added to that doc in the same commit. `case-attachments/email/` MUST NOT have a Cloudflare dashboard lifecycle rule — payment PDFs retained 7 years coupled to approval row deletion via `lib/crons/cleanup.ts` Phase 2.
+
+- **Payment extraction columns:** `approvals.extracted_*` are typed columns, source of truth for bank reconciliation. Do NOT store extraction results in `request_data` JSONB.
+
+- **approvals.expires_at enforcement:** Enforced daily by `lib/crons/cleanup.ts`. Any new `approval_type` MUST either set `expires_at` at creation OR add a stale-cleanup rule in the same commit.
+
+- **Expired approval recovery:** Users with `approvals.restore` permission can restore any expired approval to pending within 90 days via `/bm/approvals?status=expired`. After 90 days, non-payment expired approvals are hard-deleted. Payment expired approvals are retained 7 years per Companies Act 2016 s.245 before hard delete.
+
+- **Auto-expiry notification routing:** When cleanup cron auto-expires approvals at a building, notification routes: (1) primary = ALL active + `notifications_enabled` groups at that building of `group_type = 'bm_staff'` in `telegram_group_settings` (buildings may have multiple — day shift, night shift, etc.), post to every one; (2) fallback if zero bm_staff groups or all sends fail = individual DM to each `approvals.view` holder with linked `telegram_id` on users table; (3) if neither, log structured warning for ops. Never target `group_type` other than `bm_staff` for operational alerts.
+
+- **Multi-row aware queries:** Any table where operators can create multiple matching rows (`telegram_group_settings`, `bank_accounts`, `committee_members`, `contractor_orgs`, etc.) MUST query with `.select()` returning array — never `.maybeSingle()` or `.single()` or `.limit(1)`. Single-row assumption is a scale bug that works at 1 building and breaks at 10. When adding new per-building configuration, default to "N supported, iterate all."
+
+- **Account number + holder privacy:** `extracted_account_number` and `extracted_account_holder` values MUST NOT appear in logs, `extraMeta`, `skipReasonMeta`, or console output. Field names are OK in arrays like `fields_extracted: ['account_number']`; values never.
+
+| D-0751 | 2026-04-18 | feat | V36 H1 Layer 2 Session 2B — approvals.expires_at enforcement cron (Phase 1 pending→expired daily with Telegram notification, Phase 2 hard-delete with R2 coupling — 7yr payment per Companies Act 2016 s.245, 90d non-payment). BM recovery UX: Expired tab in PaymentsApprovalTab + Restore-to-pending button gated on approvals.restore + activity log. Notification routing: primary = ALL active bm_staff Telegram groups in telegram_group_settings (multi-group aware, any N groups), fallback = individual DM to approvals.view holders with telegram_id, structured warning if neither. New B3 entry_point approvals_expiry_notify. deleteFileFromR2(publicUrl) helper added to lib/storage/index.ts. R2 retention policy doc (docs/ops/R2-RETENTION-POLICY.md) + pending-retention-work tracker (docs/ops/pending-retention-work.md) established. Bible permanent rules added: R2 retention policy source of truth, extraction columns typed not JSONB, expires_at enforcement, 90-day restore grace period, auto-expiry notification routing with multi-group support, multi-row query discipline, account number/holder never-log. No new migrations this session. |
+
 ---
 
 ## §Auth-Routing
