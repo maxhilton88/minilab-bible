@@ -388,6 +388,7 @@ Freemium credit model built for all entity types. JMB/MC buildings get free mont
 | D-0652 | 2026-04-13 | feat | BM Create Company: "Invite New" tab in Contractors page was a non-functional stub. Replaced with working "Create New" flow — POST /api/bm/contractors now accepts {create_new:true, name, contact_phone, contractor_type[]}. Creates contractor_org + contractor_org_building_assignments in one transaction (rollback on assign failure). Enables BM to create security/cleaning companies directly without waiting for them to self-register on Minilab. |
 | D-0653 | 2026-04-13 | fix | VMS walk-in unit enforcement: all 4 guard forms (Visitor, Delivery, Contractor, GrabTaxi) now require unit selection OR "Common area" toggle before submit. Client-side validation (inline red error) + server-side validation (POST /api/guard/visitors returns 400 if unit_id absent and common_area !== true). UnitField shows red asterisk. Fixes 178+ records/day with missing unit data. |
 | D-0657 | 2026-04-14 | fix | UnitSearch dropdown closes on scroll: `onTouchEnd` on result buttons fired after scroll gestures (not just taps), closing dropdown when guard scrolled through unit results. Fix: replaced `onMouseDown`+`onTouchEnd` with `onClick` (only fires on tap, not scroll) + `onMouseDown={preventDefault}` (prevents input blur). |
+| D-0754 | 2026-04-19 | fix | V36 R1 hotfix — removed WhatsApp dispatch from notifyVisitorArrival. 3 visible errors + 9 silent failures at CHV revealed legacy WA visitor sends contradicted product design (PWA is the channel). notifyVisitorArrival now short-circuits with skip B3 row. Permanent bible rules added. |
 
 ### Fines & Clamping (D-0332)
 Guard PWA 3-step create flow: photo evidence → plate/violation → confirm. BM desktop: stats cards + waive modal + fine settings per violation type. Payment required before unclamp. Tables: vehicle_fines, fine_settings (migration 056). AI view: ai_view_fines. fine-photos R2 bucket.
@@ -685,6 +686,26 @@ VMS FLOW AUDIT REPORT
 **Modified:** `app/guard/page.tsx`, `app/api/guard/init/route.ts`, `app/bm/settings/apps/page.tsx`, `app/api/bm/settings/kiosk-passcode/route.ts` (new)
 
 ---
+
+### Permanent Rules (Guard-VMS)
+
+- **Visitor notifications = resident PWA only:** By product design, residents who want visitor arrival notifications download the resident PWA and receive push notifications. WhatsApp is NOT the channel — condos opted out of per-message template fees and the 24h customer-service window is not viable for broadcast notifications to residents who rarely initiate contact. `notifyVisitorArrival()` in `lib/whatsapp/send.ts` short-circuits with `skip_reason='wa_visitor_notify_disabled_by_design'`. A separate `notifyVisitorArrivalPwa()` will be added when PWA push infrastructure ships. Do NOT re-wire WhatsApp dispatch without a product decision to pay template fees AND that building's condo agreeing to the billing.
+
+- **Visitor pre-registration flow not yet built:** Residents can pre-register visitors via a one-time link (unit-scoped) shared to visitor. Visitor self-registers with IC + full identity. Arrives with QR. Guard scans. Status today: 0 pre-registrations at any building (feature not built). All current visits are walk-ins logged by guard. Pre-registration flow is a separate future session.
+
+---
+
+### D-0754 — V36 R1 hotfix: remove WhatsApp visitor notification dispatch (2026-04-19)
+
+**Date:** 2026-04-19
+**Context:** B3 telemetry (D-0742) caught the problem tonight at CHV: 3 visible errors + 9 silent failures in `ai_pipeline_runs` for `entry_point='visitor_notify'`. All were WhatsApp sends that failed because (a) the `minilab_notification` template was never approved in Meta for visitor content, (b) residents at CHV had never opened a 24h WA window (0 inbound messages), and (c) even if they had, the design decision is PWA push notifications, not WhatsApp. The WA path was legacy code that contradicted the product spec.
+**Decision:**
+1. `notifyVisitorArrival()` in `lib/whatsapp/send.ts` completely replaces its body. No Meta API calls. No template calls. No freeform calls. Calls `logPipelineSkip()` with `skip_reason='wa_visitor_notify_disabled_by_design'` to preserve telemetry on guard check-in volume, then returns `{ success: false, error: 'wa_visitor_notify_disabled_by_design' }`.
+2. `SKIP_REASONS` tuple in `lib/ai/logging/pipeline-run-logger.ts` gets the new value so TS enforces it as a valid skip reason across all call sites.
+3. `composeVisitorArrivalMessage`, `VISITOR_TYPE_PHRASE`, `PURPOSE_TO_CATEGORY` are now dead code — flagged for cleanup in a later session, NOT deleted here.
+4. Two WhatsApp template dispatch paths flagged (but not touched): `sendWhatsAppMessage` + `sendWhatsAppDirect` both fall back to `minilab_notification` template outside the 24h window — these are legitimate for collection/AI reply flows where residents DO initiate contact. Product decision required before touching those.
+5. Permanent bible rules added to §Guard-VMS above.
+**Modified:** `lib/whatsapp/send.ts`, `lib/ai/logging/pipeline-run-logger.ts`, `docs/startup/recent-decisions.md`
 
 ---
 
