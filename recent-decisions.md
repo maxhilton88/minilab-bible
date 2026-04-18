@@ -2234,6 +2234,11 @@ New portal at /committee (separate route group). Read-only governance views: col
 | D-0424 | 2026-04-08 | feat | Staff permissions: Admin/Receptionist + Accounts templates upgraded from 12→50 permissions (all 54 except settings.edit, settings.staff, settings.manage_permissions, settings.assignment). Dropdown labels now show "50 permissions". Also dropped redundant `staff_role_permissions` table (System B — was never enforced, all user_roles.staff_role_id rows NULL). Migration 064 drops table + user_roles.staff_role_id column + FK. Code refs removed from superadmin buildings delete route + seed data. actual-schema-columns.md updated. |
 | D-0498 | 2026-04-10 | fix | Committee role excluded from BM staff page queries (app/bm/staff, api/bm/staff, api/bm/staff/all). Committee members (elected owners) are not building staff — filtered to role IN ['bm','staff'] only. |
 | D-0505 | 2026-04-10 | fix | Public route hardening: forms/[buildingSlug] rate-limited (30 GET/min, 10 POST/min per IP). Residents smart field returns unit_number only (not full_name) to prevent enumeration. kiosk/verify rate-limited 30 attempts/hour per device_token. |
+| D-0747 | 2026-04-18 | security | V36 H1 Layer 2 Session 2A — approvals.* permission namespace added (view/approve/reject/restore). All 6 staff templates updated: BM + Assistant Manager + Admin/Receptionist + Accounts enabled (62 keys each for BM; 58 for others), Technician + Committee unchanged. Page-level gate added to /bm/approvals (previously ungated — security gap closed). List + mutating APIs re-gated from settings.staff to correct approvals.* keys (PATCH branches on approve vs reject). Retro-backfill applied to existing staff across all buildings: 3 staff × 4 keys = 12 rows inserted (discriminator: console.send_message = true). |
+
+### Permanent Rules (added D-0747)
+- New permission keys added to templates MUST be retro-applied to existing staff via idempotent backfill in the same session. Templates define defaults for NEW staff only; existing staff's permission sets are frozen until explicitly re-applied.
+- `/bm/approvals` and all sub-routes (`/api/bm/approvals/*`) require `approvals.*` keys, not `settings.staff`. `settings.staff` is reserved for HR/staff management actions only.
 
 ### Data Scoping Security (D-0321)
 5 security fixes found in audit:
