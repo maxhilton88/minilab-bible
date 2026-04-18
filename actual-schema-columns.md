@@ -1180,6 +1180,17 @@ status (TEXT, default 'complete') — message processing state: pending → proc
 | expires_at | timestamptz | YES | | |
 | created_at | timestamptz | YES | now() | |
 | updated_at | timestamptz | YES | now() | |
+| extracted_amount | numeric | YES | | D-0746: Gemini-extracted payment amount from receipt |
+| extracted_date | date | YES | | D-0746: Gemini-extracted payment date (ISO) |
+| extracted_reference | text | YES | | D-0746: Gemini-extracted transaction/reference number |
+| extracted_bank | text | YES | | D-0746: Gemini-extracted originating bank name |
+| extracted_account_number | text | YES | | D-0746: Gemini-extracted payer account number — PII, RLS-gated, never logged |
+| extracted_account_holder | text | YES | | D-0746: Gemini-extracted payer name on receipt — PII, RLS-gated, never logged |
+| extracted_payment_type | text | YES | | D-0746: duitnow \| ibg \| ibft \| fpx \| cash \| cheque \| transfer |
+| extraction_confidence | numeric | YES | | D-0746: Gemini confidence 0.0–1.0 |
+| extraction_status | text | NO | 'pending' | D-0746: pending \| done \| failed \| skipped |
+| extraction_error | text | YES | | D-0746: Gemini error message if failed (max 500 chars) |
+| extraction_completed_at | timestamptz | YES | | D-0746: When extraction finished (success or fail) |
 
 ## §Table-asset_logs
 ### asset_logs
