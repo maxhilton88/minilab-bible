@@ -2267,6 +2267,12 @@ New portal at /committee (separate route group). Read-only governance views: col
 5. **Tested inputs:** "GF 03-04" → CS/GF-03-04 ✓, "GF/03-04" → CS/GF-03-04 ✓, "A-1-01" → CS/A-1-01 ✓, "A1-01" → CS/A-1-01 ✓, "gf 3-4" → CS/GF-03-04 ✓, "gf3-4" → CS/GF-03-04 ✓, "GF-03-04" → CS/GF-03-04 ✓, "a 1 01" → CS/A-1-01 ✓, "B-1-01" → CS/B-1-01 ✓, exact "CS/GF-03-04" → CS/GF-03-04 ✓. All 10/10 pass.
 **Modified:** `lib/whatsapp/auto-register.ts`
 
+### D-0755 · V37 Resident PWA full audit (2026-04-19)
+
+**Summary:** Full read-only audit of every resident PWA layer — routes, API, auth, PWA infra, push notifications, visitor flow, schema, and TypeScript health. Push infrastructure is a complete stub: `web-push` not installed, SW has no push listener, send helper is a no-op loop, no subscribe UX exists. Zero delivery path for visitor arrival notifications post-D-0754. Six P0 gaps, seven P1 gaps, ten P2 gaps identified with exact file:line evidence and fix shapes. Recommended build order sequenced; Sprint 1 (offline + redirect + logout + iOS icons) estimated under 3 hours, Sprint 2 (full push stack) is a full-day sprint.
+
+**Audit file:** `docs/audits/V37-RESIDENT-PWA-AUDIT.md`
+
 ---
 
 ## §Permissions
