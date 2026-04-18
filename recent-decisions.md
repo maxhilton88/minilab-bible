@@ -333,6 +333,22 @@ TASK_REF: V14 portal routing — PERMANENT
 
 ---
 
+### D-0756 · V37 wide recon — multi-role context + platform bug sweep
+
+V37 read-only recon covering the full multi-role session infrastructure, middleware redirect sweep across all portals, and a nine-category silent bug sweep. Full audit: `docs/audits/V37-WIDE-RECON.md`.
+
+**Multi-role context verdict: EXISTS and functional** — `buildUserContexts()`, `pickInitialContext()`, `ContextSwitcher`, and `POST /api/auth/switch-context` are all wired. Session model holds `contexts[]` + `activeContext` + backward-compat `role`/`buildingId` aliases. Five of six login paths call `buildUserContexts()`; zero multi-role users in production today.
+
+**One login path misaligned:** WhatsApp `handleLoginOTP` (`app/api/webhooks/whatsapp/route.ts:583`) creates a legacy single-context session without `contexts[]` or `activeContext`. First multi-role user logging in via WhatsApp will get non-functional ContextSwitcher.
+
+**P0 bug found:** `dashboardForRole()` at `lib/auth/session.ts:203` returns `/resident/dashboard` (a 404 route) for resident/owner/tenant roles. This is the redirect target after Telegram LOGIN command login (`app/auth/tg/page.tsx:47`). Also violates bible §5 (duplicate portal routing logic). Fix: replace with `getPortalPath()`.
+
+**Middleware sweep:** Only confirmed mismatch is `/resident/*` → `/login` (MW-1, already in D-0755). All other portals intentionally share `/login`.
+
+**Other findings:** `/committee` missing from SW `PROTECTED_PREFIXES` (P1). `GET /api/auth/qr/generate` has no rate limit (P2). `select-building` legacy endpoint does not patch `activeContext` (P2). `approvals/[id]/route.ts:109` has empty `catch {}` in PATCH handler (P1). Auth guard discipline fully clean — zero `requirePermission` violations in PWA routes.
+
+---
+
 ## §Billing
 <!-- Stripe, credits, billing_config, subscription, pricing, invoicing -->
 
