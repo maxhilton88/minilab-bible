@@ -106,6 +106,7 @@ vms_passcode (text), attendance_passcode (text),
 wa_app_secret (text),
 ai_fallback_user_id (uuid, FK → users),
 ai_disabled (boolean, NOT NULL, default false),
+visitor_invite_ttl_hours (integer, NOT NULL, DEFAULT 24, CHECK 2-168),  -- Migration 110: per-building TTL for resident-generated invite links
 created_at, updated_at
 ```
 **NOT present:** latitude, longitude, latitude_lng (no geo columns at all)

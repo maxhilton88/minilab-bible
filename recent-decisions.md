@@ -2170,11 +2170,27 @@ New portal at /committee (separate route group). Read-only governance views: col
 
 | ID | Date | Category | One-line summary |
 |----|------|----------|-----------------|
+| D-0763 | 2026-04-20 | feat | V37-VIS-S2 — Resident invite generation API + PWA UI. Migration 110: buildings.visitor_invite_ttl_hours. 3 new routes. VisitorInviteScreen wired as primary visitor tile. See detail below. |
 | D-0759 | 2026-04-19 | fix | resident_pwa_sessions dropped (migration 108, 0 rows, 0 FKs). Bible §5: resident auth = WA OTP only; Google OAuth = org-only; no device tracking in resident PWA. See §Auth-Routing for full D-0759 details. |
 | D-0367 | 2026-04-05 | feature | Resident notifications: lib/notifications/resident.ts helper (WA preferred, TG fallback). Wired into payment approve/reject, resident registration approve/reject, renovation approve/reject. Facility bookings already had WA notifications. All best-effort with try/catch. |
 | D-0558 | 2026-04-11 | refactor | Residents page restructure: Building Structure + CSV Import removed from /bm/residents, UnitsOverviewSection promoted to full-width hero tab. /bm/settings gets new Import Residents card → /bm/settings/import. UnitsOverviewSection + ImportSection exported from BlocksTab.tsx. AddResidentInlineDialog added to UnitsOverviewSection toolbar (name, phone, email, IC, block-grouped unit selector, role). |
 | D-0626 | 2026-04-12 | feat | Resident portal vendor balance + statement PDFs. See detail below. |
 | D-0627 | 2026-04-12 | feat | BM dashboard vendor ageing widget — precise Advelsoft counts with Minilab fallback. See detail below. |
+
+### D-0763 — V37-VIS-S2 — Resident invite generation API + PWA UI
+**Date:** 2026-04-20
+**Context:** S2 of the 5-session visitor pre-reg build. S1 shipped visitor_invites table (D-0762). S2 lands the resident side: API to create/list/cancel invites + PWA UI to generate & share links.
+**Decision:**
+1. **Migration 110:** `buildings.visitor_invite_ttl_hours` (integer, NOT NULL, DEFAULT 24, CHECK 2–168). Per-building TTL for invite links. BM-editable surface TBD (S5). Applied to prod + NOTIFY pgrst. packages/shared/types/database.types.ts regenerated.
+2. **POST /api/resident/visitor-invites:** Creates pending invite. Auth via getSession() + resident lookup (phone+building_id). Validates unit_id not null. Rate limit 10/hr per phone via checkRateLimit. Fetches building TTL. Token = randomBytes(16).hex (32 chars). Returns invite_url `https://minilab.my/v/{token}` + expires_at + ttl_hours + building_name.
+3. **GET /api/resident/visitor-invites:** Lists last 20 of caller's invites joined with visitor data. Computes effective `expired` status in memory for pending rows past expires_at (DB update deferred to S5 cron).
+4. **POST /api/resident/visitor-invites/[id]/cancel:** Validates ownership + pending status. Sets status=cancelled, cancelled_at, cancelled_by. Returns {success: true}.
+5. **VisitorInviteScreen component** (inline in app/resident/unit/[unitId]/page.tsx): Three phases — home (2 CTAs + recent invites list), success (link + WA share + copy), legacy (opens VisitorPassScreen). Primary CTA = "Send self-registration link" → POST invite. Secondary CTA = "Fill in details myself" → opens legacy VisitorPassScreen. Recent invites list: 5 rows with status pill, copy-link, cancel. Toast for errors/copy feedback.
+6. **Wiring:** `wiredScreens.visitor` changed from VisitorPassScreen to VisitorInviteScreen. VisitorPassScreen preserved — opened as secondary CTA within VisitorInviteScreen.
+**Known limitation shipped:** `https://minilab.my/v/{token}` returns 404 until S3 lands the public self-reg page. Stage-rollout acceptable. Do not publicize to CHV residents until S3.
+**Not in scope:** Public /v/[token] page (S3), AI tool swap (S4), cron expiry (S5), BM settings UI for TTL (S5).
+**Files:** supabase/migrations/110_buildings_visitor_invite_ttl.sql (new), database.types.ts (regen), packages/shared/types/database.types.ts (regen), app/api/resident/visitor-invites/route.ts (new), app/api/resident/visitor-invites/[id]/cancel/route.ts (new), app/resident/unit/[unitId]/page.tsx (VisitorInviteScreen added, visitor wiring changed).
+**Audit ref:** docs/audits/V37-VISITOR-PREREG-RECON.md (D-0761)
 
 ### D-0627 — BM dashboard vendor ageing widget
 **Date:** 2026-04-12
