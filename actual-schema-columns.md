@@ -3144,6 +3144,7 @@ All RPCs compute MYT date boundaries in Postgres using AT TIME ZONE 'Asia/Kuala_
 | match_face | p_building_id uuid, p_descriptor vector(128), p_threshold float | TABLE(user_id, contractor_staff_id, similarity) | Face recognition match against face_enrollments |
 | unit_number_normalized | p text | text | Immutable — canonicalize unit string: lowercase + strip non-alphanumeric. "GB/01-05" → "gb0105" |
 | search_units_smart | p_building_id uuid, p_query text DEFAULT '', p_block_id uuid DEFAULT NULL, p_limit int DEFAULT 200 | SETOF units | 3-path waterfall: (A) block filter → all units uncapped, (B) no query → first N, (C) exact normalized ILIKE → fuzzy pg_trgm fallback. SECURITY DEFINER. Migration 096. |
+| retrieve_bm_exemplars | p_building_id uuid, p_embedding vector(1536), p_intent text DEFAULT NULL, p_limit int DEFAULT 2, p_min_similarity float DEFAULT 0.5 | TABLE(id uuid, original_resident_message text, bm_reply text, thread_context_snippet text, intent text, similarity float) | Cosine similarity search over bm_reply_exemplars for adoptive learning. Filters by building_id + min_similarity (default 0.5) + optional intent. Orders by embedding distance ascending. Migration 117. |
 
 ---
 
@@ -3507,3 +3508,27 @@ ran_by (text)                   -- 'service_role' for script runs
 **Index:** idx_import_backfill_log_building on building_id
 **Purpose:** Lightweight per-run audit for any building backfill. One row per script execution. No per-row detail — just aggregate stats JSONB.
 **CHV V32a run:** run_tag='v32a_chv_gap', unitsInserted=80, residentsInserted=79.
+
+## §Table-bm_reply_exemplars
+### bm_reply_exemplars (migration 117, V40-T9)
+```
+id                        (uuid PK DEFAULT gen_random_uuid())
+building_id               (uuid NOT NULL FK→buildings ON DELETE CASCADE)
+sender_profile_id         (uuid REFERENCES sender_profiles ON DELETE SET NULL)
+created_by                (uuid REFERENCES users ON DELETE SET NULL)
+bm_reply                  (text NOT NULL)
+original_resident_message (text)           -- last inbound message before this reply
+thread_context_snippet    (text)           -- last 3 messages formatted as [inbound]/[outbound]
+intent                    (text)           -- null at capture time; reserved for future classification
+embedding                 (vector(1536))   -- DashScope text-embedding-v3
+created_at                (timestamptz NOT NULL DEFAULT now())
+```
+**Indexes:**
+- `bm_reply_exemplars_embedding_hnsw` USING hnsw(embedding vector_cosine_ops) WITH (m=16, ef_construction=64)
+- `bm_reply_exemplars_building_idx` ON (building_id, created_at DESC)
+
+**RLS:** Enabled. `bm_read_own_building` SELECT policy via `app.building_id` claim. supabaseAdmin (service_role) bypasses RLS for all writes.
+
+**AI view:** `ai_view_bm_exemplars` — exposes `bm_reply_preview` (LEFT 200), `resident_message_preview` (LEFT 200), intent, created_at. No embedding column.
+
+**Purpose:** Captures BM outbound replies for adoptive learning. `captureBmReply` fires from all 3 BM console send routes (fire-and-forget). `retrieve_bm_exemplars` RPC does cosine similarity search against resident query to inject top-2 style exemplars into prompt §4.6.
