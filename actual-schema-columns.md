@@ -2078,13 +2078,18 @@ Single source of truth for all material usage (migration 059 / D-0368). Stock = 
 | media_mime_type | text | YES | | |
 | external_message_id | text | YES | | UNIQUE WHERE NOT NULL — dedup index (D-0431) |
 | sender_profile_id | uuid | YES | | FK→sender_profiles |
-| status | text | YES | | pending/processing/complete/failed (async pipeline) |
+| status | text | YES | | pending/processing/complete/failed (async pipeline); delivered/delivered_template/delivery_failed (WA/TG send); wa_delivered/wa_read (WA delivery webhook D-0774) |
 | private | boolean | YES | false | true = internal note (amber card in console, channel='internal_note') D-0434 |
 | unit_id | uuid | YES | | FK→units — activity cards scoped to unit (D-0665). idx_messages_unit_id partial index WHERE unit_id IS NOT NULL |
 | media_urls | jsonb | YES | | D-0677: multi-image activity cards — array of {url, mime_type, filename?} |
 | ref_id | uuid | YES | | D-0677: polymorphic ref to source record (no FK). idx_messages_ref WHERE ref_id IS NOT NULL |
 | ref_table | text | YES | | D-0677: names the table ref_id points to ('cases', 'renovation_applications', etc.) |
 | metadata | jsonb | YES | | D-0677: rich card metadata (case_number, title, category, assigned_to_name, resolution_note) so Console renders without refetch |
+| delivered_at | timestamptz | YES | | Set when Meta webhook reports `status=delivered` → wa_delivered (D-0774) |
+| read_at | timestamptz | YES | | Set when Meta webhook reports `status=read` → wa_read (D-0774) |
+| failed_at | timestamptz | YES | | Set when Meta webhook reports `status=failed` → delivery_failed (D-0774) |
+| delivery_error | text | YES | | Meta error title from `errors[0].title` on failed delivery (D-0774) |
+| delivery_error_code | integer | YES | | Meta error code from `errors[0].code` on failed delivery (D-0774) |
 | ai_processed | boolean | YES | false | |
 | ai_intent | text | YES | | |
 | ai_model_tier | USER-DEFINED | YES | | enum |
