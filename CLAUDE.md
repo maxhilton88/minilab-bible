@@ -1,5 +1,5 @@
 # CLAUDE.md — Minilab Platform
-<!-- Version: V35 · 2026-04-18 -->
+<!-- Version: V36 · 2026-04-19 -->
 <!-- THIS IS THE ONLY FILE READ AT STARTUP. Everything else is lazy-loaded via the Router. -->
 
 ---
@@ -72,6 +72,9 @@ Match your task to a row. Read only what's listed. If no row matches, you probab
 | Auth / login / portal routing | recent-decisions.md | §Auth-Routing |
 | Billing / Stripe / credits | recent-decisions.md | §Billing |
 | Guard VMS / visitor mgmt | recent-decisions.md | §Guard-VMS |
+| Visitor pre-registration / invite-link flow | recent-decisions.md | §Guard-VMS |
+| Multi-role context switcher / ContextSwitcher | recent-decisions.md | §Auth-Routing |
+| AI observability (pipeline runs + actions log) | recent-decisions.md | §AI-Pipeline |
 | PMC portal / multi-building | recent-decisions.md | §PMC-Portal |
 | Onboarding PWA / staff reg | recent-decisions.md | §Onboarding |
 | Console / inbox / messaging | recent-decisions.md | §Console |
@@ -127,6 +130,12 @@ Portal routing: Permanent, locked, via lib/auth/get-portal-path.ts. NEVER duplic
 - Resident → /resident always · Store = Supplier (same portal)
 - ORG admins → their desktop portal always
 
+Resident auth: Residents authenticate ONLY via WhatsApp Reverse OTP. Never Telegram, never Google OAuth, never email/password. Any code path that lets a resident in via another channel is a bible violation.
+
+Google OAuth scope: Google OAuth is ORG-only — for service provider organizations (security, cleaning, developer, supplier, store admins). Never for residents or building staff. The Google callback MUST reject users without an org role.
+
+Resident PWA device tracking: The resident PWA does NOT track devices. No last_active timestamps, no device_info, no session history. Device tracking is staff/guard/cleaner/kiosk only. `resident_pwa_sessions` was scaffolded but never wired — it is being dropped in V37.
+
 PWA API routes: Use getSession() not requirePermission().
 
 Types: NEVER modify database.types.ts manually — regenerate:
@@ -153,6 +162,20 @@ Infra:
 - Face models: /api/models/face-api/
 - Service provider registration: Google OAuth + email/password
 
+Visitor pre-registration — dual path: Residents have two ways to pre-register a visitor:
+1. Invite link (primary) — resident generates a link → shares to visitor → visitor self-registers IC + plate + photo → gets QR
+2. Fill in details (legacy) — resident enters all visitor info → gets QR to share
+Both paths coexist. Do not remove either. AI defaults to the invite-link path.
+
+Visitor self-registration requirements: Form requires IC photo (mandatory, always), vehicle plate (mandatory unless "no vehicle" flag set), visitor name + IC number (text, mandatory). Unit_id is server-locked from the invite record — visitor cannot choose or change the unit.
+
+Invite TTL: Per-building, configurable via BM Settings → Apps & Access (2–168 hours). Platform default 24h. Cron marks pending invites past `expires_at` as `status='expired'` daily.
+
+Visitor status lifecycle:
+- `visitor_invites.status`: `pending` → (`submitted` | `cancelled` | `expired`)
+- `visitors.status`: `active` → (`checked_in` → `checked_out` | `expired`)
+Guard check-in MUST set `status='checked_in'`; checkout MUST set `status='checked_out'`.
+
 ---
 
 ## §6 · Closing Block (every session end — no exceptions)
@@ -172,56 +195,54 @@ Infra:
 
 ## §7 · Current State
 
-Version: V35 (open 2026-04-17)
-Database: 180 tables · migrations 001-105
-Pages: 341 · API routes: 568 · Decisions: D-0742 latest · Portals: 17+
-Note: 049, 053 DB-only migrations have no repo files (legacy manual, non-blocking)
+Version: V37 closed (2026-04-20) · V38 open
+Database: 180 tables · migrations 001-110
+Pages: 344 · API routes: 575 · Decisions: D-0769 latest · Portals: 17+
 
-V34 accomplishments:
-- D-0726: Bible catch-up + auto-sync pre-push hook (no more manual sync)
-- D-0727: 23 cleaners unblocked (FIX-1A' backfill + enum + routing fix)
-- D-0728: Face-only clock-in enforced per bible §5 (kiosk + PWA + API)
-- D-0729: Per-user unread_count wired into console threads
-- D-0730: 135-file PMC silent-401 sweep + permission hardening
-- D-0731: V34 AI+MOA stack audit — full read-only prep audit for V35 Opus brainstorm
-- D-0732: V35 Behavioral Audit — 8 confirmed bugs with exact file:line root causes
+V37 shipped D-0755 through D-0768 (14 decisions) — full visitor pre-registration feature + major platform hardening cycle.
 
-V35 status: Behavioral audit ✅ DONE — docs/audits/V35-BEHAVIORAL-AUDIT.md
-V35 status: Architecture recon ✅ DONE — docs/audits/V35-ARCHITECTURE-RECON.md (D-0733)
-V35 status: W1 RAG wiring ✅ DONE — Tier 3 now actually retrieves (D-0734)
-V35 status: W2 stateJson injection ✅ DONE — specialist agent now sees resident profile (D-0735)
-V35 status: B1 BM auto-pause ✅ DONE — BM outbound sets 4h TTL, AI silenced (D-0736)
-V35 status: H1 PDF email flow ✅ DONE — PDF URL forwarded, Tier 1 inline approval + ACK (D-0737)
-V35 status: B4 automated sender filter ✅ DONE — bank/robot emails skip AI, message stored (D-0738)
-V35 status: H2B unit hallucination + H2A nudge state ✅ DONE — LLM extracts raw only, substring guard, always-confirm turn, state-aware nudge (D-0739)
-V35 status: Night 1 closeout ✅ DONE — docs synced, V35-NIGHT-1-HANDOFF.md created (D-0740)
-V35 status: B3 AI pipeline observability ✅ DONE — ai_pipeline_runs + ai_actions_log + full entry-point instrumentation (D-0742)
-Next V35 action: B3 complete. Next: A1 (audit loop) or R1 (staged CHV re-enable)
+V37 accomplishments:
+- D-0755/D-0756: Resident PWA audit + wide platform recon (identified 11 P0/P1 items)
+- D-0757/D-0758: B3 instrumentation verified; logActions FK + ai_processed semantic fixed
+- D-0759: Bible §5 hardened + 6 platform fixes (SW prefixes, middleware redirect, dashboardForRole removal, approvals catch, resident_pwa_sessions dropped)
+- D-0760: Google OAuth ORG-only · handleLoginOTP resident-only + hard-scoped · ContextSwitcher in /app
+- D-0761-D-0766: Visitor pre-registration feature — schema (migrations 109, 110), resident API + PWA UI, public /v/[token] page + visitor self-reg API + upload, cron expiry + BM TTL settings, AI tool swap to create_visitor_invite
+- D-0767/D-0768: Nudge bugs recon + blocked investigation (compose/nudge target displayed contact — handed to V38-S1)
 
-V35 active priorities (as of 2026-04-18):
+3 new permanent rules added to bible §5 this cycle (D-0759):
+- Residents authenticate via WhatsApp Reverse OTP only (never Telegram, never Google, never email/password)
+- Google OAuth is ORG-only (never residents or staff)
+- Resident PWA does NOT track devices
 
-✅ All CHV re-enable blockers cleared (W1, W2, B1, H1, B4, H2B+H2A — D-0734 through D-0739)
-✅ B3 AI observability shipped (D-0742) — every pipeline invocation now durably logged
+Visitor pre-reg rules added (D-0765):
+- Dual-path (invite link primary, legacy fallback — both preserved)
+- Self-reg requires IC photo + vehicle plate (or no-vehicle flag)
+- Unit server-locked from invite record
+- Invite TTL per-building configurable 2-168h, default 24h
+- Status lifecycle (pending→submitted/cancelled/expired for invites; active→checked_in→checked_out for visitors)
 
-Next sessions:
-- A1: Audit loop at minilab.my/__audit/findings — ai_audit_findings + ai_audit_runs tables + 8 starter rules + superadmin-gated page + 6h cron
-- R1: Staged CHV re-enable (draft-approval mode first via D-0424 infrastructure; then auto on ROUTINE confidence ≥ 0.75; then full)
+V38 active priorities:
+- V38-S1: BM console compose bar + nudge target displayed contact (Opus product decision needed first — see D-0767/D-0768 + docs/audits/V37-NUDGE-BUGS-RECON.md)
+- R1 observation accumulation continues (CHV AI ON since 2026-04-18)
+- A1 AI audit rules engine (blocked on R1 traffic volume)
+- PWA push infrastructure (web-push install → VAPID → SW handler → subscribe UI → notifyVisitorArrivalPwa)
 
 Deferred (not P0):
-- PDF vision extraction (H1 layer 2 — Gemini can read PDFs)
-- Model migration (Haiku 4.5 for auto-reg or specialist agent — pending CHV traffic evidence)
-- WhatsApp/Telegram automated sender filter (B4 scope was email-only)
-- Orphan file cleanup (5 V3 files + OpenAI embedder.ts + retriever.ts legacy imports)
-- MOA Phase 2 recon (CHV walkthrough — access card + car plate vendor names, Advelsoft skill JSON) — blocker for MOA live
-- FIX-1B — resolveUser silent 'bm' default hardening (defensive, non-urgent)
-- V32b — VMS floor-3 blindspot (needs device screenshot)
-- V32c — GQ ground-floor notation (fold into V32b)
+- Haiku 4.5 model migration (pending CHV traffic evidence)
+- WA/TG automated sender filter (B4 was email-only)
+- MOA Phase 2 CHV walkthrough recon
+- FIX-1B resolveUser silent 'bm' default hardening
+- V32b VMS floor-3 blindspot (needs device screenshot)
+- V32c GQ ground-floor notation (fold into V32b)
+- Guard fraud detection (defaulters + guards pressing random numbers)
+- building_payment_settings duplicate table audit
+- Dead code cleanup (composeVisitorArrivalMessage, VISITOR_TYPE_PHRASE, PURPOSE_TO_CATEGORY in send.ts — orphaned after D-0754)
+- Compose bar recipient selector UI polish (beyond V38-S1 fix)
+- Committee login UX decision
+- Expected-visitors-today view for guards
+- Notification workstream (arrival notify + invite-submitted notify — blocked on PWA push)
 
-Open observations for next session:
-- Audit rule design for A1 is a product decision — Opus should design with Max, not ship blind
-- R1 is a morning/daytime operation — not a night ship — Max observes first inbound threads on real CHV traffic
-
-Key contacts: Seeteng (Lumi, test user), Hoe Zee How (CHV, 712 units, active)
+Key contacts: Seeteng (Lumi test user), Hoe Zee How (CHV BM, 712 units, AI active)
 
 ---
 
@@ -234,7 +255,7 @@ docs/startup/ — Working docs (lazy-loaded via §4 Router)
   GRAPH_REPORT.md             9.8KB  Anchored by §Community / §God-Nodes
 
 docs/ — Archive (touch only when Router points here)
-  decisions.log               DEPRECATED — historical D-0001 through D-0668 only (see top of file)
+  decisions.log               429KB  Raw D-0001+ (not anchored)
   session-context.md           35KB  Legacy (superseded by §7)
   SESSION-SOP.md               13KB  Legacy (superseded by §2+§6)
   minilab-ai-agent-architecture.md  34KB  AI deep-dive (for MOA)
@@ -244,3 +265,12 @@ docs/ — Archive (touch only when Router points here)
   docs/audits/V35-BEHAVIORAL-AUDIT.md  8-bug behavioral root cause audit, CHV re-enable prerequisites (D-0732)
   docs/audits/V35-ARCHITECTURE-RECON.md  AI infrastructure dead code + RAG verdict (D-0733)
   docs/audits/V35-NIGHT-1-HANDOFF.md  Night 1 session narrative + B3/A1/R1 handoff (D-0740)
+  docs/audits/V36-PDF-VISION-RECON.md  H1 Layer 2 PDF extraction prerequisites — table, Gemini, UI, blast radius (D-0744)
+  docs/audits/V36-H1-LAYER2-RECON.md   H1 Layer 2 full recon — typed columns, expires_at, R2 retention, PDPA, encryption, cost (D-0745)
+  docs/audits/V36-R1-BLOCKER-RECON.md  R1 pre-flip audit — email body parsing gaps + visitor notification quality, fix shapes (D-0752)
+  docs/audits/V37-RESIDENT-PWA-AUDIT.md  Full resident PWA audit — push stack, auth, visitor flow, gaps P0-P2 (D-0755)
+  docs/audits/V37-WIDE-RECON.md  Multi-role context + middleware + platform bug sweep — dashboardForRole P0, WhatsApp login P1, SW prefixes (D-0756)
+  docs/audits/V37-B3-INSTRUMENTATION-VERIFY.md  B3 telemetry code trace — logActions FK P0 bug, ai_processed flag misuse, skip/run distribution from live data (D-0757)
+  docs/audits/V37-VISITOR-PREREG-RECON.md  Visitor pre-reg full recon — legacy flow audit, invite-link gap analysis, schema options, 12 Opus open questions (D-0761)
+  docs/audits/V37-NUDGE-BUGS-RECON.md  Nudge P0 bugs — Bug 1 (WA Web QR confusion) + Bug 2 (tenant→owner wrong phone, 286 units), root causes at file:line (D-0767)
+  docs/audits/V37-CLOSE-SUMMARY.md  V37 14-decision changelog + V38 handover spec (D-0769)
