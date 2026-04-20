@@ -752,6 +752,26 @@ VMS FLOW AUDIT REPORT
 
 ---
 
+### D-0765 · 2026-04-20 · V37-VIS-S5 · Cron expiry + BM TTL settings + bible rules
+
+**Cron:** Extended `lib/crons/visitor-cleanup.ts` to mark `visitor_invites` where `status='pending'` and `expires_at < now()` as `status='expired'`. Single UPDATE per run — scales to 300 buildings / 3k invites/day cleanly. Runs inside existing `/api/cron/daily` (Vercel Hobby single-cron rule preserved).
+
+**BM UI:** `app/bm/settings/apps/page.tsx` Guard & Security section now includes a "Visitor Invite Link Duration" number input (2–168h, default 24h). Saves via new `PATCH /api/bm/settings/visitor-invite-ttl`. GET reads current `buildings.visitor_invite_ttl_hours`; PATCH validates range then updates. Permission: `settings.edit` via `requirePermission`.
+
+**Bible §5 new rules added:**
+- Visitor pre-reg dual path (invite link primary, legacy fallback — both preserved)
+- Visitor self-reg requirements (IC photo mandatory, plate unless no-vehicle, unit server-locked)
+- Invite TTL per-building (2–168h, default 24h, BM-configurable)
+- Visitor status lifecycle (pending→submitted/cancelled/expired for invites; active→checked_in→checked_out for visitors)
+
+**Still open (deliberate):**
+- S4 — AI tool swap from `create_visitor_pass` to `create_visitor_invite`
+- Notification on visitor submit / gate arrival — blocked on PWA push workstream
+
+**Modified:** `lib/crons/visitor-cleanup.ts`, `app/api/bm/settings/visitor-invite-ttl/route.ts` (new), `app/bm/settings/apps/page.tsx`, `CLAUDE.md`
+
+---
+
 ## §PMC-Portal
 <!-- PMC pages, multi-building, PMC branding, full-access portal -->
 
