@@ -2335,6 +2335,19 @@ New portal at /committee (separate route group). Read-only governance views: col
 | D-0619 | 2026-04-12 | docs | MOA integration requirements audit: 31 skills mapped across access card (8), car plate (11), Advelsoft accounting (12). 13 P0 skills identified for CHV launch. New tables/columns needed listed. Sync frequencies recommended. Build order: Advelsoft P0 first (connection proven), access card + car plate blocked on recon. |
 | D-0623 | 2026-04-12 | feat | MOA integration schema foundation (Migration 086): 12 ALTER columns across 6 tables + 3 new tables. See detail below. |
 | D-0624 | 2026-04-12 | feat | Collections enforcement MOA dispatch: dispatchAccessBlock/Restore helper wired into stage-4 cron escalation + 3 payment restore paths. See detail below. |
+| D-0796 | 2026-04-21 | feat | MOA toggle UI added to /bm/settings/moa page. Toggle card above Agent Status section. PATCH /api/bm/settings/moa/toggle updates buildings.is_moa_active. GET reads current state. Permission: settings.edit. |
+| D-0797 | 2026-04-21 | feat | Two new resident intents — UPDATE_VEHICLE_PLATE + UPDATE_ACCESS_CARD. ROUTINE tier. ai_tools rows inserted via migration 115. Data-fetcher no-op fetchers added. |
+| D-0798 | 2026-04-21 | feat | Executor handlers update_vehicle_plate + update_access_card in lib/ai/actions/moa-updates.ts. Branch on buildings.is_moa_active: ON → instant INSERT into unit_vehicles/unit_access_cards. OFF → pending approvals row with approval_type='plate_update'/'card_update'. request_data = { plate/card_number, is_primary, resident_message }. |
+| D-0799 | 2026-04-21 | feat | /bm/approvals ApprovalsAllTab extended with plate_update (Car icon, sky) and card_update (KeyRound icon, indigo) card types. Custom expanded section shows plate/card, is_primary, resident_message. POST /api/bm/approvals/[id]/approve writes to unit_vehicles or unit_access_cards. POST /api/bm/approvals/[id]/reject updates status + notifies resident. |
+
+### D-0796–D-0799 — MOA toggle + plate/card intents + approvals extension (V40-S5)
+**Date:** 2026-04-21
+**Context:** V40-S3 laid DB foundation (unit_vehicles, unit_access_cards, buildings.is_moa_active). S5 wires the full user-facing flow: BM can toggle automation mode, the AI recognises plate/card requests, and the approvals page handles the BM-review path.
+**Decision:**
+1. **Toggle UI (D-0796):** New card at top of /bm/settings/moa using Zap icon, green when active. Optimistic toggle. `PATCH /api/bm/settings/moa/toggle` + `GET` for initial load. Permission: `settings.edit`.
+2. **Intents (D-0797):** `UPDATE_VEHICLE_PLATE` + `UPDATE_ACCESS_CARD` added to IntentId type, INTENT_DEFINITIONS array, and ai_tools DB table (migration 115). No-op fetchers added to data-fetcher.ts.
+3. **Executor (D-0798):** `lib/ai/actions/moa-updates.ts` — both handlers fetch `buildings.is_moa_active`. MOA ON: direct INSERT, returns `{ mode: 'instant' }`. MOA OFF: INSERT into approvals with approval_type='plate_update'/'card_update', returns `{ mode: 'pending_approval' }`. Unique constraint violations (23505) return named error codes. All errors are caught and returned as structured results — never thrown.
+4. **Approvals (D-0799):** ApprovalsAllTab.tsx adds Car + KeyRound icons to TYPE_ICON/TYPE_COLOR. Conditional expanded section renders plate/card/is_primary/resident_message. Approve button calls POST /approve (no dialog). Reject button opens MoaRejectDialog → POST /reject. Both endpoints look up sender_profile for WA/TG notification. Existing generic ReviewDialog untouched.
 
 ### D-0623 — MOA integration schema foundation
 **Date:** 2026-04-12
