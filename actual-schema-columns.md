@@ -284,6 +284,29 @@ created_at
 <!-- gate_id uuid FK→building_gates added (D-0442) -->
 <!-- checkout_gate_id uuid FK→building_gates added (D-0650, mig 091) -->
 
+## §Table-visitor_invites
+### visitor_invites (migration 109 — D-0762)
+```
+id (UUID PK),
+building_id (UUID NOT NULL FK→buildings CASCADE),
+unit_id (UUID NOT NULL FK→units CASCADE),
+created_by_resident_id (UUID NOT NULL FK→residents CASCADE),
+token (TEXT NOT NULL UNIQUE),
+expires_at (TIMESTAMPTZ NOT NULL),
+status (TEXT NOT NULL DEFAULT 'pending' CHECK pending/submitted/cancelled/expired),
+visitor_id (UUID FK→visitors ON DELETE SET NULL — set after visitor self-registers),
+created_at (TIMESTAMPTZ NOT NULL DEFAULT now()),
+cancelled_at (TIMESTAMPTZ),
+cancelled_by (UUID FK→users ON DELETE SET NULL),
+submitted_at (TIMESTAMPTZ)
+```
+Indexes: `idx_visitor_invites_building_status_expires` (building_id, status, expires_at), `idx_visitor_invites_resident_created` (created_by_resident_id, created_at DESC), `idx_visitor_invites_token` (token).
+RLS: enabled. Policy: service_role_all (service_role reads/writes; residents access via API only — no direct client).
+AI view: `ai_view_visitor_invites` (migration 109b) — joins unit_number from units, full_name as resident_name from residents.
+generic_read key: `visitor_invites` → `ai_view_visitor_invites`.
+<!-- token pattern follows invitations table: randomBytes(24).toString('hex') → 48-char hex (S2 will implement) -->
+<!-- CREATE POLICY in 109 has no IF NOT EXISTS — re-execution of migration 109 is unsafe (register-only) -->
+
 ## §Table-facilities
 ### facilities
 ```
