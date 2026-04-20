@@ -2078,7 +2078,7 @@ Single source of truth for all material usage (migration 059 / D-0368). Stock = 
 | media_mime_type | text | YES | | |
 | external_message_id | text | YES | | UNIQUE WHERE NOT NULL — dedup index (D-0431) |
 | sender_profile_id | uuid | YES | | FK→sender_profiles |
-| status | text | YES | | pending/processing/complete/failed (async pipeline); delivered/delivered_template/delivery_failed (WA/TG send); wa_delivered/wa_read (WA delivery webhook D-0774) |
+| status | text | YES | NULL (no default — D-0780 migration 113 dropped 'complete' default; all inserts now explicit) | pending/processing/complete/failed (async pipeline); delivered/delivered_template/delivery_failed (WA/TG send); wa_delivered/wa_read (WA delivery webhook D-0774) |
 | private | boolean | YES | false | true = internal note (amber card in console, channel='internal_note') D-0434 |
 | unit_id | uuid | YES | | FK→units — activity cards scoped to unit (D-0665). idx_messages_unit_id partial index WHERE unit_id IS NOT NULL |
 | media_urls | jsonb | YES | | D-0677: multi-image activity cards — array of {url, mime_type, filename?} |
