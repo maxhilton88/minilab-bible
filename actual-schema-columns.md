@@ -107,6 +107,7 @@ wa_app_secret (text),
 ai_fallback_user_id (uuid, FK → users),
 ai_disabled (boolean, NOT NULL, default false),
 visitor_invite_ttl_hours (integer, NOT NULL, DEFAULT 24, CHECK 2-168),  -- Migration 110: per-building TTL for resident-generated invite links
+is_moa_active (boolean, NOT NULL, DEFAULT false),  -- Migration 114: Jarvis-for-Building toggle per property
 created_at, updated_at
 ```
 **NOT present:** latitude, longitude, latitude_lng (no geo columns at all)
@@ -717,12 +718,54 @@ document_tier (INTEGER NOT NULL CHECK 0-5),
 date_effective (TIMESTAMPTZ), date_superseded (TIMESTAMPTZ),
 section_ref (TEXT), document_type (TEXT), document_title (TEXT),
 page_number (INTEGER), is_active (BOOLEAN DEFAULT true),
-model_version (TEXT DEFAULT 'text-embedding-3-small'),
+model_version (TEXT DEFAULT 'text-embedding-v3'),  -- Migration 114: corrected from text-embedding-3-small (OpenAI) to DashScope model name
+kb_entry_id (UUID FK→building_kb_entries CASCADE, nullable),  -- Migration 114: link-back for KB-sourced chunks
 created_at (TIMESTAMPTZ)
 ```
-**Indexes:** HNSW on embedding (vector_cosine_ops), GIN on content_tsv, B-tree on building_id, document_id, document_tier, is_active, document_type
+**Indexes:** HNSW on embedding (vector_cosine_ops), GIN on content_tsv, B-tree on building_id, document_id, document_tier, is_active, document_type; partial index on kb_entry_id WHERE NOT NULL
 **RPC:** search_document_chunks(building_id, query_embedding, query_text, vector_weight, keyword_weight, limit, min_tier, max_tier) — D-113 hybrid search
 **Purpose:** RAG pipeline embedded chunks with hybrid vector+full-text search (D-106)
+**Migration 114:** Added kb_entry_id FK + corrected model_version default to 'text-embedding-v3' (D-0790, D-0793)
+
+## §Table-building_kb_entries
+### building_kb_entries (Migration 114, D-0790)
+```
+id (UUID PK), building_id (UUID NOT NULL FK→buildings CASCADE),
+category (kb_category enum NOT NULL DEFAULT 'general': general/house_rules/sop/facilities/payment),
+title (TEXT NOT NULL), body (TEXT NOT NULL),
+audience_scope (audience_scope enum NOT NULL DEFAULT 'public': public/staff_only/committee_only),
+indexing_status (kb_indexing_status enum NOT NULL DEFAULT 'pending': pending/indexing/indexed/failed),
+chunk_count (INTEGER NOT NULL DEFAULT 0),
+last_indexed_at (TIMESTAMPTZ), indexing_error (TEXT),
+created_by (UUID FK→users),
+created_at (TIMESTAMPTZ NOT NULL DEFAULT now()), updated_at (TIMESTAMPTZ NOT NULL DEFAULT now())
+```
+**Indexes:** by building_id, by (building_id, category), partial on indexing_status WHERE pending/failed
+**Trigger:** trg_kb_entries_updated_at → update_updated_at()
+**View:** ai_view_kb — public entries only, body omitted (RAG reads chunks directly)
+**Purpose:** BM-managed knowledge base entries; indexer chunks+embeds body into document_chunks with kb_entry_id link-back. API: GET/POST /api/bm/kb/entries, GET/PATCH/DELETE /api/bm/kb/entries/[id], POST /api/bm/kb/entries/[id]/reindex
+
+## §Table-unit_vehicles
+### unit_vehicles (Migration 114, D-0792)
+```
+id (UUID PK), unit_id (UUID NOT NULL FK→units CASCADE),
+plate (TEXT NOT NULL), is_primary (BOOLEAN NOT NULL DEFAULT false),
+created_at (TIMESTAMPTZ NOT NULL DEFAULT now()), updated_at (TIMESTAMPTZ NOT NULL DEFAULT now())
+```
+**Indexes:** by unit_id, unique on lower(plate)
+**Trigger:** trg_unit_vehicles_updated_at → update_updated_at()
+**Purpose:** Registered vehicle plates per unit — MOA S5 plate_update approval flow (D-0792)
+
+## §Table-unit_access_cards
+### unit_access_cards (Migration 114, D-0792)
+```
+id (UUID PK), unit_id (UUID NOT NULL FK→units CASCADE),
+card_number (TEXT NOT NULL), is_primary (BOOLEAN NOT NULL DEFAULT false),
+created_at (TIMESTAMPTZ NOT NULL DEFAULT now()), updated_at (TIMESTAMPTZ NOT NULL DEFAULT now())
+```
+**Indexes:** by unit_id, unique on card_number
+**Trigger:** trg_unit_access_cards_updated_at → update_updated_at()
+**Purpose:** Registered access cards per unit — MOA S5 card_update approval flow (D-0792)
 
 ## §Table-tickets
 ### tickets (V4-T029, migration 028)
