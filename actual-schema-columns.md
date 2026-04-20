@@ -3457,6 +3457,42 @@ Migration: 083_resident_data_staging.sql
 Columns: id, building_id, resident_id, unit_id, full_name, role, related_person_name, related_person_role, ai_confidence, status, source_channel, created_at
 Source: resident_data_staging (direct select, no joins)
 
+## §Table-guard_incidents
+### guard_incidents (migration 116, V40-S8)
+```
+id (uuid PK DEFAULT gen_random_uuid()),
+building_id (uuid NOT NULL FK→buildings ON DELETE CASCADE),
+unit_id (uuid FK→units NULLABLE),
+sender_profile_id (uuid FK→sender_profiles NULLABLE),
+source_case_id (uuid FK→cases NULLABLE),
+title (text NOT NULL),
+description (text NULLABLE),
+priority (text NOT NULL DEFAULT 'normal' CHECK IN ('low','normal','high','urgent')),
+status (text NOT NULL DEFAULT 'new' CHECK IN ('new','acknowledged','resolved')),
+created_at (timestamptz DEFAULT now()),
+updated_at (timestamptz DEFAULT now())
+```
+**View:** ai_view_guard_incidents (id, building_id, unit_id, title, description, priority, status, created_at)
+**Purpose:** AI-created security incidents written by `notify_guard` handler. Telegram group ping sent to building's 'security' category group on insert.
+
+## §Table-cleaning_complaints
+### cleaning_complaints (migration 116, V40-S8)
+```
+id (uuid PK DEFAULT gen_random_uuid()),
+building_id (uuid NOT NULL FK→buildings ON DELETE CASCADE),
+unit_id (uuid FK→units NULLABLE),
+sender_profile_id (uuid FK→sender_profiles NULLABLE),
+source_case_id (uuid FK→cases NULLABLE),
+title (text NOT NULL),
+description (text NULLABLE),
+priority (text NOT NULL DEFAULT 'normal' CHECK IN ('low','normal','high','urgent')),
+status (text NOT NULL DEFAULT 'new' CHECK IN ('new','acknowledged','resolved')),
+created_at (timestamptz DEFAULT now()),
+updated_at (timestamptz DEFAULT now())
+```
+**View:** ai_view_cleaning_complaints (id, building_id, unit_id, title, description, priority, status, created_at)
+**Purpose:** AI-created cleaning complaints written by `notify_cleaner` handler. Telegram group ping sent to building's 'cleaning' category group on insert.
+
 ## §Table-import_backfill_log
 ### import_backfill_log (migration 097, V32a)
 ```
