@@ -1325,6 +1325,7 @@ Additionally, the SW CACHE_NAME is `minilab-v2` — unchanged across all 7 fix a
 | ID | Date | Category | One-line summary |
 |----|------|----------|-----------------|
 | D-0767 | 2026-04-20 | docs | V37 nudge bugs recon (READ-ONLY). Bug 1: WA QR auth flow triggered on expired 24h window (WhatsApp Web's own QR misidentified as Minilab QR — `NudgeWhatsAppButton.tsx:67` opens wa.me in new tab, requires active WA Web session). Bug 2: Tenant nudges target owner phone on 286 CHV dual-occupancy units (`unit-details/route.ts:53` orders by `role ASC` enum ordinal; `CenterTimeline.tsx:134` hardcodes `people[0]`). Root causes at file:line in V37-NUDGE-BUGS-RECON.md. NO fixes shipped — Opus design session follows. |
+| D-0768 | 2026-04-20 | docs | V37-NUDGE-FIX investigation — BLOCKED. Q1/Q2/Q3 answers confirm header also uses `people[0]` (not a separate selected-resident state). Fix requires product decision on phone-selection strategy before implementation. See D-0768 sub-section for full investigation findings. |
 | D-0736 | 2026-04-17 | fix | V35-B1: BM console outbound sets ai_paused_until (4h TTL) — migration 104 adds TIMESTAMPTZ column; direct-message + send routes fire-and-forget update on delivery; ai-pause-check reads new column (reason 'bm_takeover_auto_pause'); blue clock badge in console (distinct from amber manual pause). Full detail in D-0736 sub-section below. |
 | D-0685 | 2026-04-16 | fix | Migration 096 — `unit_number_normalized()` immutable function + `search_units_smart` RPC with 3-path waterfall (block-filter uncapped → exact-normalized ILIKE → pg_trgm fuzzy fallback). GIN + B-tree indexes on units. Fuzzy only fires when exact returns 0 rows (no noise on dense numeric formats). pg_trgm extension enabled. |
 | D-0686 | 2026-04-16 | fix | Block selection treated as FILTER (`p_block_id`, uncapped), text query treated as SEARCH (`p_query`, capped at 200). Architectural separation prevents "clicking Greenbay shows 20 of 27" class of bug. Long-term fix, not CHV-specific. |
@@ -1678,6 +1679,36 @@ Additionally, the SW CACHE_NAME is `minilab-v2` — unchanged across all 7 fix a
 5. **Case message fetch limit** — changed from `caseIds.length * 2` (only 2 messages total across all cases — a bug) to `Math.max(caseIds.length * 20, 100)` for accurate inbound counting per case.
 6. **Per-user isolation confirmed** — readStateMap is scoped to `session.userId` + `buildingId`. Two BMs see independent unread states. Opening a thread marks it read only for the BM who opened it.
 **Files:** `app/api/bm/console/threads/route.ts`
+
+---
+
+### D-0768 — V37-NUDGE-FIX: Investigation blocked — header also uses people[0]
+
+**Task:** Unit-view nudge must use the currently-displayed resident's phone, not always `people[0]`.
+
+**Investigation answers (Q1/Q2/Q3):**
+
+**Q1 — Which variable holds the "currently displayed resident" in the header?**
+Answer: **(a) — `details.people[0]`**. The header in CenterTimeline.tsx:237-239 renders `details.people[0].name` and `details.people[0].role`. There is no separate `selectedResident`, `activePerson`, or any other state tracking which specific person within a unit is "in focus." The nudge at lines 134 and 287 uses `details.people[0].phone`. Header and nudge are consistent — both always use `people[0]`.
+
+**Q2 — How does the displayed resident get chosen when BM clicks a unit?**
+BM clicks unit row in left list → `setSelectedUnitId(id)` → useEffect fires → `GET /api/bm/console/unit-details?unitId=...` → response populates `details.people[]` sorted by `role ASC` (PostgreSQL enum ordinal: owner=0, tenant=1) → header renders `details.people[0]`. No "selected person within unit" concept exists at any layer.
+
+**Q3 — Does the left list show one row per unit or per resident?**
+One row per **unit**. Each row's `resident_name` and `resident_role` come from `units/route.ts:208`: `const primary = uresidents.find(r => r.role === 'owner') || uresidents[0]` — always the owner if one exists.
+
+**Why blocked (hard rule from task brief):**
+The task said: "If Q1 answer is (a) → STOP and flag as blocker — we need a product call before ripping out the header logic." The assumed fix (wire nudge to whatever state the header uses) would be a no-op — the header also uses `people[0]`. Implementing `last_inbound_at`-based selection or adding a per-person selector would require redesigning both the header display AND the nudge phone resolution simultaneously, which is beyond minimal-fix scope.
+
+**Open question for Opus (phone-selection strategy):**
+Three options:
+1. **last_inbound_at DESC** — `unit-details` API adds `last_inbound_at` per person from `sender_profiles`; header and nudge use the person who most recently messaged (most contextually relevant for BM). This needs a join in `unit-details/route.ts` and a new `last_inbound_at` field on `PersonInfo`. Also affects the header name display.
+2. **Per-person selector** — Add clickable resident rows in unit view so BM explicitly picks a person. Header updates to show selected person. Nudge uses selected person's phone. UI change in `CenterTimeline.tsx` and `page.tsx`.
+3. **Hide nudge in unit view** — Don't show nudge button when `activeView === 'unit'`. BM must navigate to contact view (where `selectedContact?.phone` is used correctly) to nudge. Zero phone-resolution ambiguity, but changes BM workflow.
+
+Option 1 is likely correct product behavior (nudge the most recently active resident). Option 3 is a safe interim. Both need Opus signoff before implementation.
+
+**Files NOT changed:** `CenterTimeline.tsx`, `page.tsx`, `unit-details/route.ts`
 
 ---
 
