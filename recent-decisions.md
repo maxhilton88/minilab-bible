@@ -1807,6 +1807,28 @@ Option 1 is likely correct product behavior (nudge the most recently active resi
 
 ---
 
+**D-0775** (2026-04-20) — V38-S1b: Nudge internal log card persists against correct thread
+
+**Bug:** V38-S1 (D-0772) fixed nudge outbound phone but missed note persistence thread key. Nudge log card ("Nudge sent at HH:MM") stored with owner's `resident_id`, rendered in owner's thread instead of tenant's.
+
+**Root cause (Q1–Q5):**
+- Q1: `handleNudgeSent` at `page.tsx:1076` POSTs to `/api/bm/console/note`
+- Q2/Q3: Note API inserts `resident_id`; `contact-messages` fetches outbound by `.eq('resident_id', profile.resident_id)` — thread keyed on `resident_id`
+- Q4: Note API only accepts `resident_id` (no `sender_profile_id` resolution path)
+- Q5: D-0772's `details.people.find(p => p.sender_profile_id === selectedContactId)` is fragile — `unit-details` maps only ONE sender_profile per resident (last-write-wins in `senderProfileMap`). Multi-channel residents (WA + email sender_profiles) cause lookup failure → falls back to owner. Root fix: expose `resident_id` directly on `ContactListItem`
+
+**Fix:**
+1. Added `resident_id: string | null` to `ContactListItem` in `console-shared.tsx`
+2. Contacts API (`contacts/route.ts`) now returns `resident_id: p.resident_id || null` (already fetched, not previously surfaced). `ContactRow` local type updated to match.
+3. Added `resolveTarget(activeView, selectedContact, details)` pure helper in `page.tsx` helpers section — single source of truth. Contact view: returns `selectedContact.resident_id` directly. Unit/case view: resolves owner from `details.people`.
+4. Refactored `handleSend` + `handleNudgeSent` to both call `resolveTarget()` — eliminates duplicate fragile lookup, same fix applies at both sites.
+5. Synthetic contact nav ref (`pendingContactNavRef`) now carries `resident_id: person.id` for People panel → contact view navigations.
+
+**Files:** `app/bm/console/page.tsx`, `components/bm/console/console-shared.tsx`, `app/api/bm/console/contacts/route.ts`
+**Audit ref:** D-0772 (V38-S1 parent — Q4 note write flagged as incomplete)
+
+---
+
 ## §Telegram
 <!-- Telegram bot, groups, Telethon microservice, auto-groups, bot login -->
 
