@@ -1773,6 +1773,38 @@ Option 1 is likely correct product behavior (nudge the most recently active resi
 
 ---
 
+### D-0772 · V38-S1 Console send + compose bar target displayed contact (2026-04-20)
+
+**Problem:** In contact view, the BM console header correctly showed the selected sender (e.g. "Shintaroamino · tenant · +60173591850"), but the compose bar placeholder read "Type a message to [OWNER]..." and the actual send (WA/TG/email) went to the owner's phone/email instead of the displayed contact. The nudge button already correctly used `selectedContact.phone` in contact view (from D-0767 fix), but the note POST inside `handleNudgeSent` still attributed `resident_id` to the owner.
+
+**Root cause:**
+- `handleSend` (page.tsx:884): `const primary = details?.people?.find(p => p.role === 'owner') || details?.people?.[0]` — ignored `activeView` entirely.
+- `handleNudgeSent` (page.tsx:1076): same owner-biased `primary` → wrong `resident_id` in note POST.
+- `CenterTimeline.tsx:506`: `primaryName = details?.people?.[0]?.name` in the else branch — used for compose bar placeholder; fell to people[0] (owner) even when `activeView === 'contact'` with a linked unit.
+
+**Investigation (Q1–Q4):**
+- Q1: `ContactListItem.id` = `sender_profile_id` (not resident_id). Has `name`, `phone`, `email`, `unit_id`. No `resident_id` field. `PersonInfo` (from `details.people`) has `id` (resident DB id), `name`, `phone`, `email`, `sender_profile_id`.
+- Q2: `primary` used for `resident_id` in note channel (920), direct-message call `resident_id`/`recipientPhone`/`recipientEmail` (966–968). Both now fixed via view-aware resolution.
+- Q3: Compose bar placeholder sources from `primaryName` in CenterTimeline else-branch (line 506) — fixed to prefer `selectedContact.name` in contact view.
+- Q4: `handleNudgeSent` note POST `resident_id` used owner-biased `primary` — fixed. The `residentName` text passed from CenterTimeline was already correct (used `selectedContact?.name`).
+
+**Fix — 3 sites:**
+1. `handleSend` (page.tsx): inserted `contactPerson = details.people.find(p => p.sender_profile_id === selectedContactId)` before `primary` resolution. `primary = contactPerson || owner || people[0]`. In unit view `contactPerson` is null → unchanged. In contact view with a linked resident, `primary` = that resident's PersonInfo.
+2. `handleNudgeSent` (page.tsx): same contactPerson + primary pattern for note `resident_id` attribution.
+3. `CenterTimeline.tsx:506`: `primaryName` now uses `selectedContact?.name` in contact view, falling back to `people[0].name`.
+
+**Contact list API extension:** Not needed. `PersonInfo` already carries `sender_profile_id` (populated in unit-details/route.ts:353 via senderProfileMap join). Lookup is fully client-side.
+
+**Nudge phone/name in CenterTimeline:** Already correct per D-0767 — `selectedContact?.phone` and `selectedContact?.name` used in both header (132–137) and empty-timeline (286–290) nudge instances. No change needed there; confirmed via code inspection.
+
+**Unit view:** Unchanged — `contactPerson` is null in unit view, `primary` resolves to owner via existing logic.
+
+**Does NOT address:** Unit view nudge wrong-phone (people[0] always owner — open question per D-0767 §Open-Questions-for-Opus), WA Web QR confusion (Bug 1 from D-0767), per-person nudge UI, sort order.
+
+**Files:** `app/bm/console/page.tsx`, `components/bm/console/CenterTimeline.tsx`
+
+---
+
 ## §Telegram
 <!-- Telegram bot, groups, Telethon microservice, auto-groups, bot login -->
 
