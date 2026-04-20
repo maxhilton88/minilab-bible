@@ -196,8 +196,8 @@ Guard check-in MUST set `status='checked_in'`; checkout MUST set `status='checke
 ## §7 · Current State
 
 Version: V37 closed (2026-04-20) · V38 open
-Database: 180 tables · migrations 001-110
-Pages: 344 · API routes: 575 · Decisions: D-0769 latest · Portals: 17+
+Database: 180 tables · migrations 001-111
+Pages: 344 · API routes: 575 · Decisions: D-0771 latest · Portals: 17+
 
 V37 shipped D-0755 through D-0768 (14 decisions) — full visitor pre-registration feature + major platform hardening cycle.
 

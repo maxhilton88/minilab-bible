@@ -793,6 +793,24 @@ VMS FLOW AUDIT REPORT
 
 ---
 
+**D-0771 · V38-S2 VMS checkout CHECK constraint extended for 'checked_out'**
+
+Root cause: D-0762 added `status:'checked_out'` write in `checkout/route.ts` but never extended the `visitors_status_check` CHECK constraint (migration 073). Every checkout since 08:52 MYT today failed with Postgres 23514, swallowed as 404, UI showed nothing. 935 stuck visitors at CHV (48 bug-era, 887 pre-existing backlog).
+
+Migration 111 (`111_visitors_status_check_add_checked_out.sql`) drops and recreates `visitors_status_check` to include `'checked_out'`: `CHECK (status IN ('active', 'checked_in', 'checked_out', 'expired', 'cancelled'))`. Applied and verified in same session.
+
+UI error surfacing added to both checkout paths (`ActiveVisitorsList.checkout()` and `CheckOutScreen.checkout()` in `app/guard/page.tsx`) — both now parse response JSON and call `alert(d.error || 'Checkout failed — please try again')` on non-ok response. No more silent 404 swallow.
+
+Does NOT backfill the 887 pre-existing unchecked-out backlog — separate decision (Max will handle case-by-case).
+
+Bible §5 visitor status lifecycle (`active → checked_in → checked_out`) now matches DB constraint.
+
+Audit ref: `docs/audits/V38-S2-VMS-CHECKOUT-RECON.md` (D-0770)
+
+**Modified:** `supabase/migrations/111_visitors_status_check_add_checked_out.sql` (new), `app/guard/page.tsx`, `docs/startup/actual-schema-columns.md`, `CLAUDE.md`
+
+---
+
 ## §PMC-Portal
 <!-- PMC pages, multi-building, PMC branding, full-access portal -->
 

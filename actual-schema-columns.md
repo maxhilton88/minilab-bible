@@ -276,7 +276,7 @@ hosting_resident_id, visit_purpose, is_preregistered, check_in_at,
 check_out_at, logged_by, photo_url, qr_code, vehicle_plate, visit_date,
 ic_photo_url, license_photo_url, gate_id,
 checkout_gate_id (UUID FK→building_gates — mig 091, tracks exit gate),
-status (TEXT DEFAULT 'active' CHECK active/checked_in/expired/cancelled — mig 073),
+status (TEXT DEFAULT 'active' CHECK active/checked_in/checked_out/expired/cancelled — mig 073+111),
 pass_number (TEXT, nullable — mig 090),
 created_at
 ```
