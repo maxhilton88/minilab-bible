@@ -731,6 +731,27 @@ VMS FLOW AUDIT REPORT
 
 ---
 
+### D-0764 — V37-VIS-S3: Public visitor self-registration surface (2026-04-20)
+
+**Context:** S2 shipped invite generation + resident PWA UI (D-0763). `/v/{token}` returned 404 — visitors had a link but nowhere to land. S3 closes this gap.
+
+**Decisions:**
+1. **Middleware:** `/v` added to `PUBLIC_APP_PREFIXES` + `config.matcher`. `/api/visitor/:path*` added to matcher (CSRF protection applies; no session check since path is not in `PROTECTED_PREFIXES`). Routes that aren't in the matcher at all also bypass session middleware — but adding them explicitly ensures security headers are applied and CSRF is enforced on POST mutations.
+2. **`lib/visitor/generate-qr.ts`:** Extracted QR generation logic (previously inline in `app/api/resident/visitors/route.ts`) into shared helper. Parameters match legacy exactly: `width: 300, margin: 2, color: { dark: '#000000', light: '#ffffff' }`, path `visitor-passes/{building_id}/{qr_code}.png`, code format `VIS-{randomUUID().slice(0,8).toUpperCase()}`. Returns `{ qr_code, qr_image_url: string | null }` (null if upload fails — not fatal).
+3. **`app/api/resident/visitors/route.ts`:** Updated to use `generateVisitorQr` helper. Visitor row inserted first without `qr_code`, then QR generated, then `qr_code` updated. Same net result as before.
+4. **`POST /api/visitor/[token]/upload`:** Token validation → rate limit (3/60s per token) → multipart file parse → upload to `visitor-docs/{building_id}/{token}/{type}-{ts}.ext`. Returns `{ url }`. Validates file type (`image/(jpeg|png|webp|heic)`) and size (8MB max).
+5. **`POST /api/visitor/[token]/submit`:** IP rate limit (5/600s) → token validate (status=pending, not expired) → body validate → path-prefix security check on photo URLs (must contain `visitor-docs/{building_id}/{token}/`) → insert `visitors` row → `generateVisitorQr` → update `visitors.qr_code` → mark `visitor_invites.status='submitted'`. No notification sent (out of S3 scope — folds into PWA push workstream).
+6. **`app/v/[token]/page.tsx`:** SSR server component. Queries `visitor_invites` + separate queries for building/unit/resident display names (joins avoided since `visitor_invites` resolves to `any` in current generated types). Routes to 4 states: `not_found`, `cancelled`, `expired`, `submitted` (success), `pending` (form). `robots: noindex`. `dynamic = 'force-dynamic'`.
+7. **`VisitorStatusMessage`:** Minimal centered card for non-form states (not_found / cancelled / expired).
+8. **`VisitorSelfRegForm`:** Mobile-first `'use client'` form. Camera capture via `<input type="file" accept="image/*" capture="environment">` (iOS + Android compatible, no MediaRecorder). IC photo uploaded immediately on capture; licence photo shown only when plate filled. `no_vehicle` checkbox disables plate. Submit disabled until name + IC + IC photo URL + (plate OR no_vehicle). Single loading state prevents double-submit. On 410 → swaps to `VisitorStatusMessage`. On success → swaps to `VisitorSuccessScreen`.
+9. **`VisitorSuccessScreen`:** Static success display — QR image, monospace pass code, visit date (MYT-aware), building/unit/visitor context. `sessionStorage` persistence for page refresh. `alreadySubmitted` variant adds contact-host note.
+
+**No new migrations.** No new env vars. No notification gaps introduced (documented as deferred).
+
+**Modified:** `middleware.ts`, `lib/visitor/generate-qr.ts` (new), `app/api/resident/visitors/route.ts`, `app/api/visitor/[token]/upload/route.ts` (new), `app/api/visitor/[token]/submit/route.ts` (new), `app/v/[token]/page.tsx` (new), `app/v/[token]/VisitorStatusMessage.tsx` (new), `app/v/[token]/VisitorSelfRegForm.tsx` (new), `app/v/[token]/VisitorSuccessScreen.tsx` (new)
+
+---
+
 ## §PMC-Portal
 <!-- PMC pages, multi-building, PMC branding, full-access portal -->
 
