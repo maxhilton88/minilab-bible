@@ -195,9 +195,9 @@ Guard check-in MUST set `status='checked_in'`; checkout MUST set `status='checke
 
 ## §7 · Current State
 
-Version: V37 closed (2026-04-20) · V38 open
-Database: 180 tables · migrations 001-111
-Pages: 344 · API routes: 575 · Decisions: D-0771 latest · Portals: 17+
+Version: V38 closed (2026-04-20) · V39 open
+Database: 180 tables · migrations 001-113
+Pages: 344 · API routes: 576 · Decisions: D-0780 latest · Portals: 17+
 
 V37 shipped D-0755 through D-0768 (14 decisions) — full visitor pre-registration feature + major platform hardening cycle.
 
@@ -221,8 +221,26 @@ Visitor pre-reg rules added (D-0765):
 - Invite TTL per-building configurable 2-168h, default 24h
 - Status lifecycle (pending→submitted/cancelled/expired for invites; active→checked_in→checked_out for visitors)
 
-V38 active priorities:
-- V38-S1: BM console compose bar + nudge target displayed contact (Opus product decision needed first — see D-0767/D-0768 + docs/audits/V37-NUDGE-BUGS-RECON.md)
+V38 shipped D-0771 through D-0780 (7 decisions + 1 recon + 1 audit) — BM console correctness, WA delivery observability, VMS checkout unblock, AI message status normalization.
+
+V38 accomplishments:
+- D-0771 (V38-S2): VMS checkout CHECK constraint extended to 'checked_out' + UI error surfacing — 935 stuck visitors unblocked
+- D-0772 (V38-S1): Console send/nudge/compose target displayed contact in contact view (resolveTarget helper introduced)
+- D-0774 (V38-S3): WA delivery webhook wired — statuses[] now processed, new columns delivered_at/read_at/failed_at/delivery_error/delivery_error_code, wa_delivered/wa_read/delivery_failed lifecycle, avg 1.56s delivery signal
+- D-0775 (V38-S1b): Nudge internal log card persists against correct thread in contact view; resident_id surfaced on ContactListItem
+- D-0778 (V38-S6): delivery_failed surfaced in console timeline — window_closed reuses 24h nudge banner, other failures get expandable dev-details card with copy-to-clipboard, one-click retry via new /api/bm/console/retry endpoint (classifyDeliveryFailure helper)
+- D-0779 (V38-S5): Silent delivery failures fixed — deliveryError now captured in all failure branches across direct-message + send + retry routes (deliveryFailedPatch helper)
+- D-0780 (V38-S7): AI message status normalized from 'complete' to 'delivered'; messages.status DB default dropped; 1,694 historical rows backfilled; 8 other insert sites made explicit
+
+Three new class-killing helpers this cycle:
+- lib/messaging/resolveTarget (or equivalent per page.tsx) — view-aware recipient resolution
+- lib/messaging/classify-delivery-failure — failure category single source of truth
+- lib/messaging/delivery-failed-patch — DB update shape for failed sends
+
+V39 active priorities:
+- V38-S4: UI tick truth + rename delivered→sent (deferred — needs more webhook data first)
+- 24h window pre-send block (prevent 131047 instead of surfacing it post-fail)
+- 887 stale active visitors backlog (pre-V38-S2 stuck rows)
 - R1 observation accumulation continues (CHV AI ON since 2026-04-18)
 - A1 AI audit rules engine (blocked on R1 traffic volume)
 - PWA push infrastructure (web-push install → VAPID → SW handler → subscribe UI → notifyVisitorArrivalPwa)
@@ -274,3 +292,6 @@ docs/ — Archive (touch only when Router points here)
   docs/audits/V37-VISITOR-PREREG-RECON.md  Visitor pre-reg full recon — legacy flow audit, invite-link gap analysis, schema options, 12 Opus open questions (D-0761)
   docs/audits/V37-NUDGE-BUGS-RECON.md  Nudge P0 bugs — Bug 1 (WA Web QR confusion) + Bug 2 (tenant→owner wrong phone, 286 units), root causes at file:line (D-0767)
   docs/audits/V37-CLOSE-SUMMARY.md  V37 14-decision changelog + V38 handover spec (D-0769)
+  docs/audits/V38-S2-VMS-CHECKOUT-RECON.md  VMS checkout CHECK constraint root cause — 935 stuck visitors, fix shape (D-0770)
+  docs/audits/V38-S3-WA-DELIVERY-RECON.md  WA double-tick lies — delivery webhook not wired since D-0366, fix spec (D-0773)
+  docs/audits/V38-S5-SILENT-FAILURES-RECON.md  Silent delivery_failed writes — root cause in send routes, Nursyafiqah vs Nas, 33-row blast radius, fix shape (D-0776)
