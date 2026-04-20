@@ -1,8 +1,27 @@
 # Recent Decisions — Minilab
 <!-- Anchored by feature area. Use: awk '/^## §Feature/,/^## §/' docs/startup/recent-decisions.md | head -n -1 -->
 <!-- List all anchors: grep '^## §' docs/startup/recent-decisions.md -->
-<!-- Last updated: 2026-04-12 (session: V32 contact badge unread-count fix — D-0595) -->
+<!-- Last updated: 2026-04-20 (session: V37 close + V38 open — D-0769) -->
 <!-- For full history: docs/startup/old/decisions.log -->
+
+## §V37-Close
+<!-- Version close decisions — D-0769 -->
+
+| ID | Date | Category | One-line summary |
+|----|------|----------|-----------------|
+| D-0769 | 2026-04-20 | docs | V37 close + V38 open (docs sync). CLAUDE.md §7 updated to V37 closed / V38 open. docs/audits/V37-CLOSE-SUMMARY.md created — 14-decision changelog + V38 handover. Router §4 additions verified (Multi-role context switcher + AI observability rows added). Schema doc drift checked (§Table-visitor_invites ✓, visitor_invite_ttl_hours in §Table-buildings ✓, ai_view_visitor_invites documented inline ✓). capabilities-map.md visitor section updated (createVisitorInvite primary, multi-turn flow count 6→5). recent-decisions.md: 424KB above 400KB threshold but ALL entries are within 90-day window (oldest D-0303, 2026-04-01) — archival skipped this session. V37 delivered: resident PWA hardening, platform bug cleanup, AI observability fixes, 3 permanent bible §5 rules, full visitor pre-registration feature (invite-link flow end-to-end), nudge bug recon. V38 open: V38-S1 handover ready (BM console compose + nudge displayed-contact fix — awaiting Opus product decision on phone-selection strategy). |
+
+### D-0769 — V37 close + V38 open (2026-04-20)
+
+**Files changed:**
+- `CLAUDE.md` — §7 updated (V37 closed, V38 open, counts: 180 tables, 344 pages, 575 routes); §4 two rows added; §8 V37-CLOSE-SUMMARY.md reference added
+- `docs/audits/V37-CLOSE-SUMMARY.md` — new: 14-decision changelog + V38 handover spec
+- `docs/startup/recent-decisions.md` — D-0769 appended under new §V37-Close anchor
+- `docs/capabilities-map.md` — createVisitorInvite added as primary action; multi-turn flow count 6→5 (visitor pre-reg flow removed in D-0766)
+
+**Open Question for Opus:** `§View-ai_view_visitor_invites` does not have its own anchor in `actual-schema-columns.md` — view details are documented inline within `§Table-visitor_invites`. Not blocking, but a future schema doc cleanup should give it a dedicated `§View-` section for awk-findability.
+
+**Archival note:** `recent-decisions.md` is 424KB (above 400KB threshold). However, oldest entry is D-0303 (2026-04-01) — all decisions are within 90-day window. No archival this session. Revisit in V38 if file exceeds 500KB.
 
 ## §Face-Recognition
 <!-- face-api.js, pgvector, enrollment, match_face, cosine threshold -->
