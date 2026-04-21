@@ -3190,3 +3190,13 @@ Matcher comment added noting bibble/ai-activity are intentionally excluded.
 **Root cause:** robots.txt `Disallow: /api/` was blocking Claude `web_fetch` from reaching `/api/bibble/state` for session-start state retrieval.
 
 **Impact:** Unblocks Claude web_fetch session-start retrieval of `/api/bibble/state`. Combined with Cloudflare WAF allow for `/api/bibble/*` (D-0838), Claude can now fetch live state in every new Opus session.
+
+---
+
+### D-0840 · 2026-04-22 · robots.txt — remove Disallow /api/ conflict
+
+**Decision:** Removed the blanket `Disallow: /api/` entry from `app/robots.ts`. Retained all other disallows (/bm/, /guard/, /contractor/, /resident/, /superadmin/, /login, /setup, /auth/).
+
+**Root cause:** Anthropic's web_fetch parser uses last-match-wins semantics. Even with explicit `Allow: /api/bibble/` entries, the subsequent `Disallow: /api/` was overriding them, preventing Claude from fetching `/api/bibble/state`.
+
+**Security note:** Real security on `/api/*` routes is middleware auth (requirePermission, getSession), not robots.txt hiding. Removing the disallow has no security impact — unauthenticated crawlers were never the threat model for API routes.
