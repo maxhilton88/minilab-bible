@@ -3535,3 +3535,62 @@ created_at                (timestamptz NOT NULL DEFAULT now())
 **AI view:** `ai_view_bm_exemplars` — exposes `bm_reply_preview` (LEFT 200), `resident_message_preview` (LEFT 200), intent, created_at. No embedding column.
 
 **Purpose:** Captures BM outbound replies for adoptive learning. `captureBmReply` fires from all 3 BM console send routes (fire-and-forget). `retrieve_bm_exemplars` RPC does cosine similarity search against resident query to inject top-2 style exemplars into prompt §4.6.
+
+## §Table-bibble_tasks
+
+**Table:** `bibble_tasks`
+**Purpose:** Persistent backing for /bibble kanban — one row per task card. Written by seed + API (superadmin). Read publicly via RLS SELECT policy.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | text PK | Stable snake_case string (e.g. `task_a3_gemini_swap`) |
+| title | text | Short human-readable label |
+| session | text | CHECK: 'V42','V43','V50','MOA','DONE','ARCHIVE' |
+| urgency | text | CHECK: 'CRITICAL','HIGH','MEDIUM','LOW','DEFER' |
+| status | text | CHECK: 'READY','RECON_NEEDED','BLOCKED','IN_PROGRESS','DONE' |
+| origin | text | Where this task was identified (nullable) |
+| scenario | text | Plain-text problem description (markdown OK) |
+| fix_proposal | text | Proposed fix (nullable, markdown OK) |
+| why_urgency | text | Why this urgency level (nullable) |
+| blocked_by | text | What's blocking this (nullable) |
+| related_d_numbers | int[] | D-number references (default '{}') |
+| display_order | int | Sort within column (lower = higher) |
+| created_at | timestamptz | Auto |
+| updated_at | timestamptz | Auto via trigger trg_bibble_tasks_updated_at |
+
+**Indexes:** (session, display_order), status, updated_at DESC
+**RLS:** SELECT public (USING true). INSERT/UPDATE/DELETE: service_role only (no policy, bypasses RLS).
+
+---
+
+## §Table-bibble_task_remarks
+
+**Table:** `bibble_task_remarks`
+**Purpose:** Threaded remarks on bibble tasks. Author is plain string: 'max' (BM writes), 'claude' (Claude Code writes via lib/bibble/log.ts).
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | gen_random_uuid() |
+| task_id | text FK | → bibble_tasks(id) ON DELETE CASCADE |
+| author | text | 'max' or 'claude' |
+| body | text | Remark content |
+| created_at | timestamptz | Auto |
+
+**Index:** (task_id, created_at DESC)
+**RLS:** SELECT public. Writes: service_role only.
+
+---
+
+## §Table-bibble_meta
+
+**Table:** `bibble_meta`
+**Purpose:** Key-value metadata for /bibble header strip. Updated by closing block rule 11.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| key | text PK | 'version', 'version_status', 'latest_d', 'open_priorities' |
+| value | text | Current value |
+| updated_at | timestamptz | Auto |
+
+**Seeded values:** version=V42, version_status=in_flight, latest_d=D-0833, open_priorities='A3 Gemini swap · A2 email sentiment · B4 image-no-caption · /bibble build'
+**RLS:** SELECT public. Writes: service_role only.

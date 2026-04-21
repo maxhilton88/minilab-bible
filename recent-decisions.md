@@ -3117,3 +3117,48 @@ Full end-to-end PWA audit. 34 total fixes:
   - **4 doc columns → 1 Documents Summary**: Nationality badge + FOMEMA badge on first line, IC/passport + work permit expiry in `text-[10px]` on second line. Full detail still visible in the expanded row panel.
   - **Flag button**: changed from text button (`Flag` label) to icon-only (`AlertTriangle` h-7 w-7), reducing visual noise. Title tooltip retained for discoverability.
 - **No API/DB changes** — pure UI refactor.
+
+## §Bibble-Platform
+
+### D-0834 · 2026-04-22 · Migration 121 + bibble tables + seed
+
+**Decision:** Introduce three new tables (`bibble_tasks`, `bibble_task_remarks`, `bibble_meta`) as the persistent backing store for the /bibble live task board. Migration 121 applied to prod and verified.
+
+**Schema summary:**
+- `bibble_tasks`: id (text PK), title, session CHECK('V42','V43','V50','MOA','DONE','ARCHIVE'), urgency CHECK('CRITICAL','HIGH','MEDIUM','LOW','DEFER'), status CHECK('READY','RECON_NEEDED','BLOCKED','IN_PROGRESS','DONE'), scenario, fix_proposal, why_urgency, blocked_by, related_d_numbers int[], display_order int. Trigger `trg_bibble_tasks_updated_at` auto-sets updated_at. RLS: public SELECT, service_role writes.
+- `bibble_task_remarks`: id uuid PK, task_id FK → bibble_tasks, author text, body text, created_at. RLS: public SELECT.
+- `bibble_meta`: key text PK, value text. Pre-seeded with version, version_status, latest_d, open_priorities. RLS: public SELECT.
+- 36 tasks seeded across V42 (12), MOA (7), V43 (2), V50 (15).
+
+**Note:** Migration contains `CREATE POLICY` without IF NOT EXISTS — re-execution is unsafe (register-only on re-apply).
+
+---
+
+### D-0835 · 2026-04-22 · /bibble page + API routes + doc mirror
+
+**Decision:** Ship /bibble as a public dark-theme kanban at minilab.my/bibble. No auth for reading; superadmin session for writes.
+
+**Routes shipped:**
+- `GET /api/bibble/state` — full dashboard payload (meta + counts + today_ai + tasks + remarks_by_task). Single URL for Opus session-start fetch.
+- `GET/POST /api/bibble/tasks` — list and create tasks (POST: superadmin only, Zod-equivalent validation).
+- `GET/PATCH/DELETE /api/bibble/tasks/[id]` — fetch, partial-update, and delete a task (write: superadmin).
+- `POST /api/bibble/tasks/[id]/remark` — append remark with author string. `author='max'` for BM writes, `author='claude'` for Claude Code writes.
+- `GET /bibble/raw/[...slug]` — serves local .md files as text/markdown for Opus cold-fetch (allowlist-only, path traversal rejected).
+
+**Page:** `app/bibble/page.tsx` (server component → initial data fetch → `<BibbleKanban>` client). Dark theme (#0A0A0B bg), sticky header with live meta + AI counts, 4-column desktop grid / horizontal tab mobile, @dnd-kit drag-drop between columns persists to DB, right-side drawer with markdown rendering (react-markdown + remark-gfm), SWR 30s revalidation.
+
+**Components:** BibbleCard, BibbleDrawer, BibbleRemarks, BibbleKanban (all in components/bibble/).
+
+**Helper module:** `lib/bibble/log.ts` — upsertBibbleRemark, setBibbleTaskStatus, createBibbleTask, updateBibbleMeta. Used by future Sonnet sessions in closing block.
+
+---
+
+### D-0836 · 2026-04-22 · CLAUDE.md §2/§4/§6/§7 update
+
+**Decision:** Update CLAUDE.md so every future session auto-fetches live state and updates the board at close.
+
+**Changes:**
+- §2 Session Protocol: Prepend FETCH LIVE STATE instruction — GET /api/bibble/state before any other work.
+- §4 Router: Add rows for task board state endpoint and individual task detail.
+- §6 Closing Block: Add rule 11 BIBBLE SYNC (mandatory) — upsertBibbleRemark + setBibbleTaskStatus + updateBibbleMeta after every session.
+- §7 Current State: Bump to V42 in_flight, migrations 001-121, 189 tables, D-0836 latest.
