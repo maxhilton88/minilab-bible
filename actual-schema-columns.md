@@ -108,6 +108,8 @@ ai_fallback_user_id (uuid, FK → users),
 ai_disabled (boolean, NOT NULL, default false),
 visitor_invite_ttl_hours (integer, NOT NULL, DEFAULT 24, CHECK 2-168),  -- Migration 110: per-building TTL for resident-generated invite links
 is_moa_active (boolean, NOT NULL, DEFAULT false),  -- Migration 114: Jarvis-for-Building toggle per property
+email_footer_template (text, nullable),  -- Migration 120 (D-0832): plain-text email footer auto-appended to console email replies; supports {{staff_name}} token
+email_footer_enabled (boolean, default false),  -- Migration 120: when true, footer auto-prefills into compose box for email replies
 created_at, updated_at
 ```
 **NOT present:** latitude, longitude, latitude_lng (no geo columns at all)
@@ -153,13 +155,12 @@ id, phone (nullable for building accounts), full_name, auth_id, is_active, last_
 profile_photo_url, telegram_id, telegram_username, created_at, updated_at,
 google_email, google_id, email (text, unique where not null), password_hash (text),
 account_type (text, default 'individual', CHECK: 'individual'|'building'),
-totp_secret (text, nullable), totp_enabled (boolean, default false),
-email_signature (text, nullable), email_signature_enabled (boolean, NOT NULL, default false)
+totp_secret (text, nullable), totp_enabled (boolean, default false)
 ```
 **Migration 049:** Added email, password_hash, account_type. Made phone nullable with CHECK constraint (phone required unless account_type='building'). Building service accounts login with email+password, no phone needed.
 **V12-P5:** Added totp_secret (TOTP 2FA secret, superadmin only) and totp_enabled (boolean). Per-user TOTP with env var fallback.
 **Migration 066:** Added telegram_blocked (boolean, default false). Set to true when TG bot-blocked 403 detected.
-**Migration 119 (D-0828):** Added email_signature (text, nullable) and email_signature_enabled (boolean, default false). Per-BM-user signature auto-prefilled into /bm/console email compose when enabled. Managed via GET/PATCH /api/bm/settings/email-signature (uses getSession, not requirePermission — per-user preference).
+**Migration 120 (D-0833):** Dropped email_signature and email_signature_enabled (added by migration 119 / D-0828). Per-user signature caused cross-user writes when staff shared sessions. Replaced with building-level email footer template — see buildings.email_footer_* in §Table-buildings.
 
 ## §Table-console_read_state
 ### console_read_state (D-0432, migration 066)
