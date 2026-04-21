@@ -712,7 +712,7 @@ created_at (TIMESTAMPTZ), updated_at (TIMESTAMPTZ)
 ```
 id (UUID PK), building_id (UUID NOT NULL FK→buildings),
 document_id (UUID NOT NULL), chunk_index (INTEGER NOT NULL),
-content (TEXT NOT NULL), embedding (vector(1536)),
+content (TEXT NOT NULL), embedding (vector(1024)),  -- D-0825 migration 118: corrected from 1536 (DashScope compatible-mode dim)
 content_tsv (tsvector GENERATED from content),
 document_tier (INTEGER NOT NULL CHECK 0-5),
 date_effective (TIMESTAMPTZ), date_superseded (TIMESTAMPTZ),
@@ -2099,7 +2099,7 @@ Single source of truth for all material usage (migration 059 / D-0368). Stock = 
 | source_type | text | NO | | |
 | media_url | text | NO | | |
 | ai_caption | text | YES | | |
-| embedding | USER-DEFINED | YES | | vector |
+| embedding | USER-DEFINED | YES | | vector(1024) — DashScope text-embedding-v3 (D-0825 migration 118: corrected from 1536) |
 | entity_tags | ARRAY | YES | | |
 | created_at | timestamptz | YES | now() | |
 
@@ -3520,7 +3520,7 @@ bm_reply                  (text NOT NULL)
 original_resident_message (text)           -- last inbound message before this reply
 thread_context_snippet    (text)           -- last 3 messages formatted as [inbound]/[outbound]
 intent                    (text)           -- null at capture time; reserved for future classification
-embedding                 (vector(1536))   -- DashScope text-embedding-v3
+embedding                 (vector(1024))   -- DashScope text-embedding-v3 (compatible-mode dim, corrected in D-0825 migration 118)
 created_at                (timestamptz NOT NULL DEFAULT now())
 ```
 **Indexes:**
