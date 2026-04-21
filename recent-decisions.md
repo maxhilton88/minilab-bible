@@ -3180,3 +3180,13 @@ if (pathname.startsWith('/bibble') || pathname.startsWith('/api/bibble')) {
 Matcher comment added noting bibble/ai-activity are intentionally excluded.
 
 **Verified public:** `/bibble` renders, `/api/bibble/state` returns JSON, `/bibble/raw/*.md` serves text/markdown. Claude can now fetch state API in every new Opus session without auth.
+
+---
+
+### D-0839 · 2026-04-22 · robots.txt Allow for /bibble + /api/bibble
+
+**Decision:** Added explicit `Allow` rules in `app/robots.ts` for `/bibble`, `/bibble/`, `/api/bibble/`, `/ai-activity`, `/api/ai-activity/` before the existing `Disallow: /api/`. Per robots.txt spec, explicit Allow overrides the broader Disallow when more specific. Next.js renders `allow` array entries as `Allow:` lines before `Disallow:` lines in the output.
+
+**Root cause:** robots.txt `Disallow: /api/` was blocking Claude `web_fetch` from reaching `/api/bibble/state` for session-start state retrieval.
+
+**Impact:** Unblocks Claude web_fetch session-start retrieval of `/api/bibble/state`. Combined with Cloudflare WAF allow for `/api/bibble/*` (D-0838), Claude can now fetch live state in every new Opus session.
