@@ -153,11 +153,13 @@ id, phone (nullable for building accounts), full_name, auth_id, is_active, last_
 profile_photo_url, telegram_id, telegram_username, created_at, updated_at,
 google_email, google_id, email (text, unique where not null), password_hash (text),
 account_type (text, default 'individual', CHECK: 'individual'|'building'),
-totp_secret (text, nullable), totp_enabled (boolean, default false)
+totp_secret (text, nullable), totp_enabled (boolean, default false),
+email_signature (text, nullable), email_signature_enabled (boolean, NOT NULL, default false)
 ```
 **Migration 049:** Added email, password_hash, account_type. Made phone nullable with CHECK constraint (phone required unless account_type='building'). Building service accounts login with email+password, no phone needed.
 **V12-P5:** Added totp_secret (TOTP 2FA secret, superadmin only) and totp_enabled (boolean). Per-user TOTP with env var fallback.
 **Migration 066:** Added telegram_blocked (boolean, default false). Set to true when TG bot-blocked 403 detected.
+**Migration 119 (D-0828):** Added email_signature (text, nullable) and email_signature_enabled (boolean, default false). Per-BM-user signature auto-prefilled into /bm/console email compose when enabled. Managed via GET/PATCH /api/bm/settings/email-signature (uses getSession, not requirePermission — per-user preference).
 
 ## §Table-console_read_state
 ### console_read_state (D-0432, migration 066)
