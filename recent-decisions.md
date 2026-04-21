@@ -3162,3 +3162,21 @@ Full end-to-end PWA audit. 34 total fixes:
 - §4 Router: Add rows for task board state endpoint and individual task detail.
 - §6 Closing Block: Add rule 11 BIBBLE SYNC (mandatory) — upsertBibbleRemark + setBibbleTaskStatus + updateBibbleMeta after every session.
 - §7 Current State: Bump to V42 in_flight, migrations 001-121, 189 tables, D-0836 latest.
+
+---
+
+### D-0837 · 2026-04-22 · V42-S0.5 HOTFIX — middleware bibble exclusion
+
+**Decision:** Added explicit early-return guard in `middleware.ts` for `/bibble` and `/api/bibble` paths, returning `NextResponse.next()` before any auth check. Mirrored the `/ai-activity` public pattern (excluded by omission from matcher; now also guarded inside the function body).
+
+**Root cause:** Initial V42-S0.5 build added routes but inherited the default middleware auth guard — unauthenticated requests to `/bibble` received 403 in production.
+
+**Fix shape:** Top of middleware function body:
+```ts
+if (pathname.startsWith('/bibble') || pathname.startsWith('/api/bibble')) {
+  return applySecurityHeaders(NextResponse.next());
+}
+```
+Matcher comment added noting bibble/ai-activity are intentionally excluded.
+
+**Verified public:** `/bibble` renders, `/api/bibble/state` returns JSON, `/bibble/raw/*.md` serves text/markdown. Claude can now fetch state API in every new Opus session without auth.
