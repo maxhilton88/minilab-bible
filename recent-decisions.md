@@ -3594,3 +3594,37 @@ Migration `v43_d8_s3_facility_extend` applied to prod:
 - `app/api/bm/facilities/route.ts` — GET now returns `approval_mode` + `concurrent_slots`; POST/PATCH accept and write both fields
 
 **Rule:** Push is always primary for resident booking notifications; WhatsApp send is gated on `whatsapp_templates.approval_status = 'approved'` for the relevant kind. Existing WA helpers must never be removed or rewritten — only gated.
+
+**D-0870 — V43 D8.S3b: Resident facility booking UI + reminder cron dual-channel (2026-04-23)**
+
+**New APIs:**
+- `GET /api/resident/facilities/[id]/availability?date=YYYY-MM-DD` — returns facility hours, concurrent_slots, max_booking_hours, advance_booking_days + sweep-line `ranges[]` with filled count per overlapping segment. Frontend uses filled >= concurrent_slots to highlight fully booked time blocks in red.
+- `GET /api/resident/facilities/bookings` — session-resident's bookings across all buildings; joins facilities(id, name); ordered by booking_date DESC; optional `status=` filter.
+- `PATCH /api/resident/facilities/bookings/[id]/cancel` — validates booking belongs to session resident, status in (pending, confirmed), booking_date+start_time > 24h from now (hardcoded MYT). Returns `{ ok: false, reason: 'too_close' | 'not_cancellable' }` on failure.
+
+**New component:** `components/resident/FacilityBookingScreen.tsx`
+- Props: `open, onClose, unitId, buildingId, initialTab?`
+- Three-state Browse flow: list view → calendar + availability → confirm card
+- Horizontal date scroller of `advance_booking_days` days from today; select → fetch availability
+- Visual timeline bar (opening_time → closing_time): amber = partial overlap, red = slot_full (filled >= concurrent_slots)
+- Start/end time dropdowns in 30-min steps; end filtered to max_booking_hours window from start
+- Live block detection: submit disabled + red warning if picked range hits a full slot
+- 409 slot_full response: toast + auto-refresh availability (race guard)
+- Confirm view: emerald ✅ for auto-approve, amber ⏳ for manual-approve with summary card
+- My Bookings tab: list by booking_date DESC, status badges (amber/emerald/grey/slate/red), detail sheet, cancel button with 24h guard toast
+- Premium dark zinc UI consistent with notices/tenders/SOS modals
+
+**Hub wiring (`app/resident/unit/[unitId]/page.tsx`):**
+- `facility` tile hidden entirely (filtered from SERVICES grid) when `unit.facility_booking_enabled === false`
+- When enabled: opens `FacilityBookingScreen` modal; WA redirect removed
+- `?open=facility` → opens modal (browse tab); `?open=facility&tab=mybookings` → opens My Bookings tab directly
+- `facilityOpen` + `facilityInitialTab` state added; handled in same `openParam` useEffect
+
+**Unit API (`app/api/resident/unit/[unitId]/route.ts`):** buildings select now includes `facility_booking_enabled`; returned as `unit.facility_booking_enabled: boolean`.
+
+**Reminder cron (`lib/crons/reminders.ts`):**
+- Booking reminders query now selects `residents!inner(id, phone, full_name)` (id needed for user resolution)
+- Per-booking: push always via `sendPushToUser(userId, { category:'facility_booking', tag:'booking-{id}-{kind}', url:'/resident?open=facility&tab=mybookings' })` (fire-and-forget)
+- WA now gated: `buildingHasApprovedTemplate(building_id, reminderKind)` before `sendOrQueue`; reminderKind mapped to `FacilityNotificationKind` ('booking_reminder_24h' | 'booking_reminder_1h')
+- Existing ±30 min idempotency window and Vercel cron schedule unchanged
+- `[cron] reminder {kind} booking {id} push:{bool} wa_gated_building:{id}` log line per booking
