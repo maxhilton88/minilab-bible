@@ -344,7 +344,8 @@ id, contractor_org_id (nullable — migration 060), full_name, phone, role, ic_n
 is_active, joined_at, face_enrolled, compreface_subject_id,
 ble_tracking_enabled, created_at, updated_at,
 nationality, passport_number, work_permit_number, work_permit_expiry,
-work_permit_file_url, fomema_status, fomema_expiry, fomema_file_url, photo_url
+work_permit_file_url, fomema_status, fomema_expiry, fomema_file_url, photo_url,
+is_shift_lead (boolean NOT NULL DEFAULT false — migration 125)
 ```
 **NOT present:** `status` (correct is `is_active`)
 **NOTE:** `contractor_org_id` is nullable (dropped NOT NULL in migration 060). Staff can exist without a company — BM creates staff first, links to company later via PUT /api/bm/staff/assign-company (D-0388/D-0389). FK constraint is preserved. Unassigned staff get a building assignment with null contractor_org_id (migration 061) so they appear on the All Staff page.
@@ -366,6 +367,7 @@ clock_in_lat, clock_in_lng, clock_out_lat, clock_out_lng,
 compreface_match_score, face_match_score, verification_method,
 selfie_url, offline_synced, notes,
 auto_clocked_out (BOOLEAN DEFAULT false — mig 073, set by auto-clockout cron),
+checked_in_by_user_id (uuid REFERENCES users(id) — migration 125, nullable, set when shift lead clocks in another staff),
 created_at
 ```
 NOTE: contractor_staff_id is now nullable (dropped NOT NULL in migration 057).
