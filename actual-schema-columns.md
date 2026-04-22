@@ -3594,3 +3594,50 @@ created_at                (timestamptz NOT NULL DEFAULT now())
 
 **Seeded values:** version=V42, version_status=in_flight, latest_d=D-0833, open_priorities='A3 Gemini swap · A2 email sentiment · B4 image-no-caption · /bibble build'
 **RLS:** SELECT public. Writes: service_role only.
+
+---
+
+## §Table-pending_sends
+### pending_sends (migration 123, V43-D6 Manual Nudge)
+```
+id                (uuid PK DEFAULT gen_random_uuid())
+building_id       (uuid NOT NULL FK→buildings ON DELETE CASCADE)
+resident_id       (uuid FK→sender_profiles ON DELETE SET NULL)
+recipient_wa      (text NOT NULL)                -- phone digits (no leading '+')
+message_content   (text NOT NULL)                -- base message WITHOUT footer
+trigger_source    (text NOT NULL)                -- canonical values listed below
+context_jsonb     (jsonb)                        -- caller-specific metadata
+block_reason      (text NOT NULL
+                    CHECK IN ('outside_24h_no_templates',
+                              'outside_24h_no_match',
+                              'fallback_template_failed'))
+status            (text NOT NULL DEFAULT 'pending'
+                    CHECK IN ('pending','sent_manual','dismissed'))
+resolved_by       (uuid FK→users ON DELETE SET NULL)
+resolved_at       (timestamptz)
+created_at        (timestamptz NOT NULL DEFAULT now())
+```
+**Indexes:**
+- `pending_sends_building_pending_idx` ON (building_id, created_at DESC) WHERE status='pending'
+- `pending_sends_created_at_idx` ON (created_at DESC)
+
+**RLS:** Enabled.
+- `pending_sends_select_building` (SELECT) — `is_superadmin() OR has_building_access(building_id)`
+- `pending_sends_update_building` (UPDATE) — `is_superadmin() OR (has_building_access(building_id) AND app_user_role() IN ('bm','staff','superadmin'))`
+- No INSERT/DELETE policy — only service_role writes (supabaseAdmin via send-or-queue).
+
+**AI view:** `ai_view_pending_sends` — preview-only `message_preview` (LEFT 200), trigger_source, block_reason, status, created_at, resolved_at. Building-scoped ORDER BY created_at DESC.
+
+**ai_tools row:** `read_pending_sends` (scope=admin, category=messaging, min_role=staff, keywords `pending sends`, `blocked messages`, `manual nudge queue`, `stuck notifications`, `unsent messages`, `nudge queue`).
+
+**Purpose:** Queue for proactive outbound WhatsApp messages blocked by the 24-hour conversation window with no template fallback. Written by `lib/whatsapp/send-or-queue.ts` when sendWhatsAppDirect fails with a queueable `SendFailureReason`. Consumed by `/bm/approvals` Manual Nudge tab where BM hand-sends via wa.me and clicks Mark sent / Dismiss. 3 API routes: `GET /api/bm/pending-sends`, `POST /api/bm/pending-sends/[id]/mark-sent`, `POST /api/bm/pending-sends/[id]/dismiss`.
+
+**Canonical trigger_source values:**
+- Collection engine: `collection_stage_1`, `collection_stage_2`, `collection_stage_4`, `collection_stage_5`
+- Reminders cron: `booking_reminder_tomorrow`, `booking_reminder_in1h`, `parcel_reminder`
+- Follow-up nudge: `ai_followup_nudge`
+- AI notifications: `ai_notify_resident`
+- Case status: `case_status_in_progress`, `case_status_resolved`, `case_status_closed`, `case_inspection_scheduled`, `case_inspection_cleared`
+- Parcel receipt: `parcel_received`
+- Facility booking decision: `facility_booking_approved`, `facility_booking_rejected`
+- Announcement broadcast: `announcement_broadcast`

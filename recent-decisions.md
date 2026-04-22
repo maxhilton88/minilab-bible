@@ -3339,3 +3339,69 @@ Replaced superadmin session gate on /bibble write routes with shared-password ht
 - `components/bibble/BibbleKanban.tsx` — partition activeTasks/doneTasks, tasksForColumn filters from activeTasks, CompletedSection rendered below kanban
 - `components/bibble/CompletedSection.tsx` — new collapsible section, collapsed by default, sorted by updated_at DESC
 - `components/bibble/BibbleCard.tsx` — optional `dimmed` prop: grayscale + opacity-60 with hover reveal
+
+---
+
+## §Manual-Nudge
+
+### D-0853 · 2026-04-22 · V43-D6 — Manual Nudge approval tab (pending_sends + sendOrQueue)
+
+**Change:** When an outbound proactive WhatsApp send is blocked by the 24-hour conversation window and no approved template can deliver it, we no longer drop the message silently. Instead it lands in a new `pending_sends` queue that the BM can triage from a fresh **Manual Nudge Needed** tab on `/bm/approvals`. The BM clicks **Open WhatsApp** to hand-send from their personal WhatsApp (pre-filled message via wa.me), then **Mark as sent** or **Dismiss**.
+
+**Why:** Pre-D-0853, proactive crons (collection engine, reminders, follow-up nudges, announcements) silently failed when the resident was outside the 24h window — the BM had no visibility into undelivered messages. This closes the observability gap and gives BMs a concrete workflow to recover.
+
+**Schema (migration 123, applied):**
+- `pending_sends` table: `id`, `building_id` FK→buildings(CASCADE), `resident_id` FK→sender_profiles(SET NULL), `recipient_wa`, `message_content`, `trigger_source`, `context_jsonb`, `block_reason` CHECK('outside_24h_no_templates','outside_24h_no_match','fallback_template_failed'), `status` CHECK('pending','sent_manual','dismissed') default 'pending', `resolved_by` FK→users, `resolved_at`, `created_at`.
+- Indexes: `(building_id, created_at DESC) WHERE status='pending'`, `(created_at DESC)`.
+- RLS: BM SELECT + UPDATE own building via `has_building_access()` + role in ('bm','staff','superadmin'); service_role bypass for INSERT.
+- `ai_view_pending_sends` created (preview-only message column, building-scoped, ORDER BY created_at DESC).
+- `ai_tools` row `read_pending_sends` registered with keywords for generic_read intent matching.
+
+**New helper — `lib/whatsapp/send-or-queue.ts`:** single entry point for proactive sends. Calls `sendWhatsAppDirect`; on `outside_24h_no_templates` / `outside_24h_no_match` / `fallback_template_failed` it queues to `pending_sends` with the appropriate `block_reason`. Returns `{sent:true,...} | {sent:false,queued:true,pendingSendId,reason} | {sent:false,queued:false,error}`.
+
+**New helpers:**
+- `lib/whatsapp/nudge-templates.ts` — 8 base message builders (collection, booking, parcel, parcel-received, case-status, inspection, facility-booking-decision, announcement-broadcast). Produces body text **without** footer.
+- `lib/whatsapp/format-nudge-message.ts` — appends "If you have any problem please text here: {phone}\n\nThis is a NO-REPLY session. DO NOT REPLY HERE." using `buildings.whatsapp_phone_number`. Footer is **nudge-only** — applied in the UI for the wa.me link, never injected into API sends.
+
+**Structured reason codes:** `lib/whatsapp/send.ts` `SendResult.reason?: SendFailureReason` union (`outside_24h_no_templates`|`outside_24h_no_match`|`fallback_template_failed`|`wa_not_configured`|`other`) — the switch sendOrQueue uses to classify.
+
+**8 proactive callers swapped to sendOrQueue:**
+1. `lib/crons/collection-engine.ts` — stages 1, 2, 4, 5 (trigger_source `collection_stage_{1,2,4,5}`)
+2. `lib/crons/reminders.ts` — bookings 24h + 1h (`booking_reminder_tomorrow`, `booking_reminder_in1h`) + parcel uncollected (`parcel_reminder`)
+3. `lib/crons/followup-nudge.ts` — removed 24h pre-check, replaced `sendTextMessage` with `sendOrQueue` (`ai_followup_nudge`); queued nudges count as "handled"
+4. `lib/ai/actions/notifications.ts` — `notify_resident` (`ai_notify_resident`)
+5. `app/api/bm/cases/[id]/route.ts` — status change + inspection scheduling (`case_status_{in_progress,resolved,closed}`, `case_inspection_{scheduled,cleared}`)
+6. `lib/whatsapp/send.ts` — `notifyParcelReceived` via dynamic import to avoid circular dep (`parcel_received`)
+7. `app/api/bm/facilities/bookings/route.ts` — booking decision (`facility_booking_approved`|`facility_booking_rejected`)
+8. `app/api/bm/announcements/route.ts` — broadcast loop now tracks `totalSent` + `totalQueued` separately (`announcement_broadcast`)
+
+**NOT touched** (inbound-reply or user-initiated paths, already inside 24h window or template-aware): webhook AI reply, console direct-message, console retry, auto-register welcome, resident-portal welcome.
+
+**API routes (3 new):** `GET /api/bm/pending-sends?status=pending&limit=50` (enriches with resident_name + unit_number via phone join), `POST /api/bm/pending-sends/[id]/mark-sent`, `POST /api/bm/pending-sends/[id]/dismiss`. All gated by `requirePermission('approvals.view' | 'approvals.approve', req)`.
+
+**UI — new Manual Nudge tab on /bm/approvals:**
+- `TabDef.label` type widened from `string` → `React.ReactNode` to support the badge.
+- `components/bm/approvals/ManualNudgeTabLabel.tsx` — client component polls pending count every 30s, renders red-dot badge on tab when count > 0.
+- `components/bm/approvals/ManualNudgeTab.tsx` — row cards with resident name + unit, trigger-source friendly label, block-reason pill, relative created_at, full message preview, actions: **Open WhatsApp** (wa.me link with `formatNudgeMessage` footer), **Mark as sent**, **Dismiss**.
+
+**generic_read allowlist:** `pending_sends` + alias `manual_nudges` added to `lib/ai/generic-read/allowed-tables.ts` pointing to `ai_view_pending_sends`.
+
+**Files changed (new):**
+- `supabase/migrations/123_pending_sends.sql`
+- `lib/whatsapp/send-or-queue.ts`
+- `lib/whatsapp/nudge-templates.ts`
+- `lib/whatsapp/format-nudge-message.ts`
+- `app/api/bm/pending-sends/route.ts`
+- `app/api/bm/pending-sends/[id]/mark-sent/route.ts`
+- `app/api/bm/pending-sends/[id]/dismiss/route.ts`
+- `components/bm/approvals/ManualNudgeTab.tsx`
+- `components/bm/approvals/ManualNudgeTabLabel.tsx`
+
+**Files changed (modified):**
+- `lib/whatsapp/send.ts` — SendFailureReason union + reason-bearing SendResult + notifyParcelReceived routed via sendOrQueue
+- `lib/crons/collection-engine.ts`, `lib/crons/reminders.ts`, `lib/crons/followup-nudge.ts`
+- `lib/ai/actions/notifications.ts`
+- `app/api/bm/cases/[id]/route.ts`, `app/api/bm/facilities/bookings/route.ts`, `app/api/bm/announcements/route.ts`
+- `lib/ai/generic-read/allowed-tables.ts`
+- `components/bm/TabLayout.tsx`, `app/bm/approvals/page.tsx`
+- `types/database.types.ts` (regenerated)
