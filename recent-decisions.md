@@ -3447,3 +3447,18 @@ Replaced superadmin session gate on /bibble write routes with shared-password ht
 - `components/bm/ai-health/AiHealthClient.tsx` — client component
 
 **Thresholds (V1 hardcoded):** repeat_guard ≥3, confidence_drop ≥30% & ≥20 runs, misrouting ≥2× & ≥10/day, cost ≥2× & ≥USD 5.
+
+### D-0855 · 2026-04-22 · V43-D7-hotfix — Migration 124 idempotency + permanent migration hygiene rule
+
+**Change:** Source-file hygiene patch to `supabase/migrations/124_ai_health_alerts.sql`. Migration was already applied to prod; this is a guard against re-run failure (branch rebase, DR restore, manual re-apply).
+
+**What changed in the file:**
+- Added `DROP POLICY IF EXISTS "bm_read_ai_health_alerts" ON ai_health_alerts;` before the matching `CREATE POLICY`.
+- Added `DROP POLICY IF EXISTS "bm_update_ai_health_alerts" ON ai_health_alerts;` before the matching `CREATE POLICY`.
+- `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS` were already present — no change needed.
+- No triggers in this migration.
+- Zero policy/column/index semantic changes.
+
+**Permanent rule added to CLAUDE.md §5:** All future migrations must be idempotent: `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `DROP POLICY IF EXISTS` before every `CREATE POLICY`, `DROP TRIGGER IF EXISTS` before every `CREATE TRIGGER`. Re-running any migration file must never fail or leave the DB in a partial state.
+
+**Files changed:** `supabase/migrations/124_ai_health_alerts.sql`, `CLAUDE.md` (§5 new rule).
