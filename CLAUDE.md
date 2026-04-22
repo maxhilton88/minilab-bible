@@ -224,7 +224,7 @@ Image CORS — R2 rendering vs pixel-read: Never add crossOrigin="anonymous" to 
 
 Version: V43 in_flight · V42 in_flight · V41 closed 2026-04-21
 Database: 188 tables · migrations 001-126
-Pages: 350 · API routes: 610 · Decisions: D-0865 latest · Portals: 17+
+Pages: 350 · API routes: 620 · Decisions: D-0871 latest · Portals: 17+
 Live task board: /bibble · State API: /api/bibble/state · Raw docs: /bibble/raw/*.md · Doc manifest: /api/bibble/docs
 V43-D8-S1a shipped D-0864 — push infra: web-push, SW handlers, usePushSubscription hook, /api/push POST+DELETE+PATCH, 3 event wires, migration 126.
 V43-D8-S1b shipped D-0865 — resident card grid landing (/resident server component, ResidentCardGrid, dark premium 1-per-row), /resident/settings push prefs (ResidentSettingsClient, per-category toggles). task_d8_pwa_push=DONE. S2 READY.
