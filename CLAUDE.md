@@ -1,5 +1,5 @@
 # CLAUDE.md — Minilab Platform
-<!-- Version: V42 in_flight · 2026-04-22 -->
+<!-- Version: V43 in_flight · 2026-04-22 -->
 <!-- THIS IS THE ONLY FILE READ AT STARTUP. Everything else is lazy-loaded via the Router. -->
 
 ---
@@ -99,6 +99,8 @@ Match your task to a row. Read only what's listed. If no row matches, you probab
 | Guard incidents / cleaning complaints / operational tasks / notify_resident / listing | recent-decisions.md | §AI-Pipeline |
 | Incidents tab on BM VMS / guard PWA / cleaner PWA (guard_incidents, cleaning_complaints UI) | recent-decisions.md | §Guard-VMS |
 | Adoptive learning / BM reply style / bm_reply_exemplars / §4.6 prompt injection | recent-decisions.md | §AI-Pipeline |
+| Manual Nudge / pending_sends / 24h window queue / sendOrQueue | recent-decisions.md | §Manual-Nudge |
+| AI Health / ai_health_alerts / silent failure / hallucination / trend detection | recent-decisions.md | §AI-Health |
 
 ### Architecture & Code Navigation
 
@@ -196,6 +198,10 @@ Per-feature Save buttons live visually inside the section they save — never fl
 
 DashScope text-embedding-v3 native dim = 1024. Compatible-mode supports {512, 768, 1024} only. NEVER use 1536 (that's OpenAI text-embedding-3-small, different provider). All pgvector columns on embedding-producing tables are vector(1024). All HNSW indexes are ops=vector_cosine_ops. Origin: V41-S3g — document_chunks + bm_reply_exemplars + media_search_index migrated from 1536→1024 in migration 118.
 
+Migration idempotency: All future migrations must be idempotent. Use CREATE TABLE IF NOT EXISTS, CREATE INDEX IF NOT EXISTS, DROP POLICY IF EXISTS before every CREATE POLICY, DROP TRIGGER IF EXISTS before every CREATE TRIGGER. Re-running any migration file must never fail or leave the DB in a partial state. Origin: V43-D7-hotfix — migration 124 had bare CREATE POLICY with no drop-guard; idempotency added as source-file patch without re-applying.
+
+Image CORS — R2 rendering vs pixel-read: Never add crossOrigin="anonymous" to <img> tags used purely for rendering (avatars, thumbnails, document previews) — R2's current CORS config causes rendering to fail. Client-side code that needs to read pixel data from an R2 image (face-api.js, canvas export, cropping) must (a) append a cache-bust query param like ?_cb=<timestamp> to force a fresh network request, AND (b) set crossOrigin="anonymous" on the <img> it constructs in code — NOT on any shared rendering tag. The cache-bust prevents browser from serving a tainted non-CORS cache entry; the in-code crossOrigin enables canvas pixel access. Origin: V43-N1-hotfix (D-0858) diagnosed cache taint; V43-N1-hotfix-2 (D-0859) corrected the rule after rendering-tag crossOrigin caused R2 to return access-control-allow-origin: null → broken avatars across /bm/staff/all, /bm/cases, and attendance kiosk.
+
 ---
 
 ## §6 · Closing Block (every session end — no exceptions)
@@ -216,10 +222,16 @@ DashScope text-embedding-v3 native dim = 1024. Compatible-mode supports {512, 76
 
 ## §7 · Current State
 
-Version: V42 in_flight · V41 closed 2026-04-21
-Database: 186 tables · migrations 001-121
-Pages: 347 · API routes: 602 · Decisions: D-0849 latest · Portals: 17+
+Version: V43 in_flight · V42 in_flight · V41 closed 2026-04-21
+Database: 188 tables · migrations 001-126
+Pages: 350 · API routes: 610 · Decisions: D-0865 latest · Portals: 17+
 Live task board: /bibble · State API: /api/bibble/state · Raw docs: /bibble/raw/*.md · Doc manifest: /api/bibble/docs
+V43-D8-S1a shipped D-0864 — push infra: web-push, SW handlers, usePushSubscription hook, /api/push POST+DELETE+PATCH, 3 event wires, migration 126.
+V43-D8-S1b shipped D-0865 — resident card grid landing (/resident server component, ResidentCardGrid, dark premium 1-per-row), /resident/settings push prefs (ResidentSettingsClient, per-category toggles). task_d8_pwa_push=DONE. S2 READY.
+V43-N1 shipped D-0856, D-0857 (2 decisions) — blocking face enrollment on all 3 upload paths + BM face backfill tool; shift-lead flag + bulk attendance clock-in by shift lead; migration 125; "via {name}" badge on BM attendance tab.
+V43-N1-hotfix shipped D-0858 — cache-bust in FaceBackfillButton; crossOrigin on rendering tags (reverted in hotfix-2).
+V43-N1-hotfix-2 shipped D-0859 — revert rendering-tag crossOrigin (broke avatars); correct §5 Image CORS rule.
+
 V42 in flight — ALL priorities, scenarios, remarks live at /bibble. This §7 no longer tracks pending items (moved to bibble_tasks table per D-0834). Historical session summaries preserved below for context.
 
 V41-S7 shipped D-0832, D-0833 (2 decisions) — per-user email signature (D-0828) replaced with building-level email footer template. Migration 120 drops `users.email_signature*`, adds `buildings.email_footer_template` + `buildings.email_footer_enabled`. Console prefill interpolates `{{staff_name}}` from session full_name — fixes cross-user write bug (Asha writing into HZH's row on shared front-desk PC). UI: new "Email Footer" card at /bm/settings/email with live preview of interpolated output.
