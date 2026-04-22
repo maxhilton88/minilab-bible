@@ -2505,12 +2505,25 @@ New portal at /committee (separate route group). Read-only governance views: col
 
 | ID | Date | Category | One-line summary |
 |----|------|----------|-----------------|
+| D-0865 | 2026-04-22 | feat | V43-D8-S1b — Resident card grid landing + settings screen. /resident rewritten as dark mobile-first card grid (1-per-row, building image, role pills). /resident/settings wired to usePushSubscription hook — per-category toggles, turn-off-all. See detail below. |
 | D-0763 | 2026-04-20 | feat | V37-VIS-S2 — Resident invite generation API + PWA UI. Migration 110: buildings.visitor_invite_ttl_hours. 3 new routes. VisitorInviteScreen wired as primary visitor tile. See detail below. |
 | D-0759 | 2026-04-19 | fix | resident_pwa_sessions dropped (migration 108, 0 rows, 0 FKs). Bible §5: resident auth = WA OTP only; Google OAuth = org-only; no device tracking in resident PWA. See §Auth-Routing for full D-0759 details. |
 | D-0367 | 2026-04-05 | feature | Resident notifications: lib/notifications/resident.ts helper (WA preferred, TG fallback). Wired into payment approve/reject, resident registration approve/reject, renovation approve/reject. Facility bookings already had WA notifications. All best-effort with try/catch. |
 | D-0558 | 2026-04-11 | refactor | Residents page restructure: Building Structure + CSV Import removed from /bm/residents, UnitsOverviewSection promoted to full-width hero tab. /bm/settings gets new Import Residents card → /bm/settings/import. UnitsOverviewSection + ImportSection exported from BlocksTab.tsx. AddResidentInlineDialog added to UnitsOverviewSection toolbar (name, phone, email, IC, block-grouped unit selector, role). |
 | D-0626 | 2026-04-12 | feat | Resident portal vendor balance + statement PDFs. See detail below. |
 | D-0627 | 2026-04-12 | feat | BM dashboard vendor ageing widget — precise Advelsoft counts with Minilab fallback. See detail below. |
+
+### D-0865 — V43-D8-S1b — Resident card grid landing + settings screen
+**Date:** 2026-04-22
+**Context:** S1b of the V43 D8 PWA push series. S1a (D-0864) wired push infra + 3 event wires. S1b ships the UI layer: card grid landing for /resident and push-preferences settings screen.
+**Decision:**
+- `app/resident/page.tsx` rewritten as async server component. Phone-based resident lookup (same pattern as portfolio route — user_id null for all CHV residents). Renders `<ResidentCardGrid cards={cards} />`.
+- `components/resident/ResidentCardGrid.tsx` — dark premium card grid, 1-per-row, 44×44 SOS placeholder top-right reserved for S2. Building image shown via Next.js Image; gradient fallback (from-neutral-700 to-neutral-900) when null. Role pills: owner=emerald-400, tenant=sky-400, family=violet-400, occupant=amber-400.
+- `/api/resident/portfolio` extended with `building_image` in buildings join and `cards[]` in response (sorted building_name+unit_number ASC). Existing `units`, `tenders`, `personal_properties` fields preserved.
+- `app/resident/settings/page.tsx` — server component, session-gated. Fetches resident full_name+phone. Renders `<ResidentSettingsClient>`.
+- `components/resident/ResidentSettingsClient.tsx` — all 4 permission states handled (unsupported/denied/default/granted+subscribed). Enable notifications CTA → `subscribe(['visitor_checkin','case_update','application_update'])`. Per-category checkboxes → `updateCategories()` on change. "Turn off all" → `unsubscribe()`. Read-only account (name, phone) + sign-out via POST /api/auth/logout.
+- `task_d8_pwa_push` marked DONE (S1a + S1b complete). `task_v43_d8_s2_notices_sos` queued as READY.
+**Files:** app/resident/page.tsx, app/api/resident/portfolio/route.ts, components/resident/ResidentCardGrid.tsx, app/resident/settings/page.tsx, components/resident/ResidentSettingsClient.tsx
 
 ### D-0763 — V37-VIS-S2 — Resident invite generation API + PWA UI
 **Date:** 2026-04-20
