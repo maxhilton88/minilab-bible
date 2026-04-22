@@ -3641,3 +3641,28 @@ created_at        (timestamptz NOT NULL DEFAULT now())
 - Parcel receipt: `parcel_received`
 - Facility booking decision: `facility_booking_approved`, `facility_booking_rejected`
 - Announcement broadcast: `announcement_broadcast`
+
+## §Table-ai_health_alerts
+
+Added migration 124 (D-0854). AI Health observability — 6 signal types, per-building, BM-reviewable.
+
+| column | type | nullable | default | notes |
+|--------|------|----------|---------|-------|
+| id | uuid | NO | gen_random_uuid() | PK |
+| building_id | uuid | NO | | FK→buildings(CASCADE) |
+| severity | text | NO | | CHECK('red','yellow') |
+| alert_type | text | NO | | CHECK('incident','trend') |
+| signal_type | text | NO | | CHECK('silent_failure','hallucination_hit','repeat_guard','confidence_drop','misrouting_spike','cost_spike') |
+| summary | text | NO | | Human-readable alert description |
+| context_jsonb | jsonb | YES | | Pipeline run ID, error text, sender profile, dedup key |
+| unit_id | uuid | YES | | FK→units(SET NULL) — null for trend alerts without unit context |
+| status | text | NO | 'pending' | CHECK('pending','reviewed') |
+| resolved_by | uuid | YES | | FK→users(SET NULL) |
+| resolved_at | timestamptz | YES | | |
+| created_at | timestamptz | NO | now() | |
+
+Indexes: `(building_id, status) WHERE status='pending'`, `(created_at DESC)`.
+RLS: `is_superadmin() OR has_building_access(building_id)` for SELECT; adds role IN('bm','staff','superadmin') for UPDATE. Service role bypasses for INSERT (application code).
+View: `ai_view_ai_health_alerts` (all columns minus context_jsonb write fields).
+ai_tools: `get_ai_health_alerts` (handler=generic_read).
+generic_read allowlist key: `ai_health_alerts`.

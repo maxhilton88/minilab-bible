@@ -3405,3 +3405,45 @@ Replaced superadmin session gate on /bibble write routes with shared-password ht
 - `lib/ai/generic-read/allowed-tables.ts`
 - `components/bm/TabLayout.tsx`, `app/bm/approvals/page.tsx`
 - `types/database.types.ts` (regenerated)
+
+## §AI-Health
+
+### D-0854 · 2026-04-22 · V43-D7 — AI Health page: alerts table + incident hooks + daily trend cron
+
+**Change:** New `/bm/ai-health` page surfaces 6 classes of AI anomaly as actionable rows with severity badges (red/yellow), summary text, "Open conversation" deep-link, and "Mark reviewed" button. V1 = resident AI only. No WhatsApp/email notifications — page-only.
+
+**Detection — incidents (real-time):**
+- `reportSilentFailure()` — called in v4-pipeline.ts catch block (fire-and-forget). Inserts red alert with first line of error + pipeline_run_id. Never blocks caller.
+- `reportHallucinationHit()` — called in specialist-agent.ts when hallucination guard fires (before output.message is overwritten to fallback). Sets `ai_pipeline_runs.hallucination_hit = true` + inserts yellow alert with suppressed response. Never blocks caller.
+
+**Detection — trends (daily cron, MYT yesterday window):**
+- `repeat_guard`: ≥3 hallucination_hit runs by same sender_profile_id → one alert per offender (yellow).
+- `confidence_drop`: intent avg confidence yesterday ≥30% lower than 7-day avg AND ≥20 runs (yellow).
+- `misrouting_spike`: cases.bm_reassigned yesterday ≥2× 7-day daily avg AND ≥10 yesterday (yellow).
+- `cost_spike`: USD cost yesterday ≥2× 7-day daily avg AND ≥USD 5 (yellow). Pricing keyed per model_used; fallback = Sonnet-tier ($0.003/$0.015 per 1K).
+- Dedup: skip if pending alert with same (building_id, signal_type, dedup_key) already exists.
+
+**Misrouting write path:** `PATCH /api/bm/cases/[id]` — any `body.category` change away from `oldCase.category` sets `cases.bm_reassigned = true` in same update.
+
+**Permission:** `ai.health.view` added to PERMISSIONS catalog + ROLE_TEMPLATES (building_manager gets all; assistant_manager, admin_receptionist, accounts get it too). Missing from technician and committee_member (not relevant roles).
+
+**Sidebar:** AI Health entry added to BM Management section. Badge count fetched server-side in layout.tsx from `ai_health_alerts WHERE status='pending'` on each render; shows red badge when count > 0.
+
+**Schema (migration 124, applied):**
+- `ai_health_alerts` table: `id` uuid PK, `building_id` FK→buildings(CASCADE), `severity` CHECK('red','yellow'), `alert_type` CHECK('incident','trend'), `signal_type` CHECK(6 values), `summary` text, `context_jsonb` jsonb, `unit_id` FK→units(SET NULL), `status` CHECK('pending','reviewed') default 'pending', `resolved_by` FK→users, `resolved_at`, `created_at`. RLS: `is_superadmin() OR has_building_access()` for SELECT; same + role check for UPDATE. Indexes: `(building_id, status) WHERE status='pending'`, `(created_at DESC)`.
+- `ai_pipeline_runs.hallucination_hit` boolean NOT NULL DEFAULT false. Index: `(sender_profile_id, created_at DESC) WHERE hallucination_hit=true`.
+- `cases.bm_reassigned` boolean NOT NULL DEFAULT false.
+- `ai_view_ai_health_alerts` view created.
+- `get_ai_health_alerts` registered in ai_tools (handler_name='generic_read', keywords: ai health, anomaly, hallucination, silent failure, misrouting, cost spike, confidence drop).
+- `ai_health_alerts` added to `lib/ai/generic-read/allowed-tables.ts`.
+
+**New files:**
+- `lib/ai/health-detector.ts` — `reportSilentFailure` + `reportHallucinationHit`
+- `lib/crons/ai-health-trends.ts` — daily `run()` registered in `/api/cron/daily`
+- `app/api/bm/ai-health/route.ts` — GET list alerts
+- `app/api/bm/ai-health/count/route.ts` — GET pending count (sidebar badge)
+- `app/api/bm/ai-health/[id]/mark-reviewed/route.ts` — POST mark reviewed
+- `app/bm/ai-health/page.tsx` — server component with PermissionGate
+- `components/bm/ai-health/AiHealthClient.tsx` — client component
+
+**Thresholds (V1 hardcoded):** repeat_guard ≥3, confidence_drop ≥30% & ≥20 runs, misrouting ≥2× & ≥10/day, cost ≥2× & ≥USD 5.
