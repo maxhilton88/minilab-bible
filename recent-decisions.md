@@ -2505,6 +2505,7 @@ New portal at /committee (separate route group). Read-only governance views: col
 
 | ID | Date | Category | One-line summary |
 |----|------|----------|-----------------|
+| D-0867 | 2026-04-23 | feat | V43-D8-S2a — Notices resident screen + tender rewires + parcel tile removal. GET /api/resident/announcements, NoticesScreen modal, TendersScreen modal, push on BM publish (notice category), butler→Hire Contractor, parcel tile removed. See detail below. |
 | D-0865 | 2026-04-22 | feat | V43-D8-S1b — Resident card grid landing + settings screen. /resident rewritten as dark mobile-first card grid (1-per-row, building image, role pills). /resident/settings wired to usePushSubscription hook — per-category toggles, turn-off-all. See detail below. |
 | D-0763 | 2026-04-20 | feat | V37-VIS-S2 — Resident invite generation API + PWA UI. Migration 110: buildings.visitor_invite_ttl_hours. 3 new routes. VisitorInviteScreen wired as primary visitor tile. See detail below. |
 | D-0759 | 2026-04-19 | fix | resident_pwa_sessions dropped (migration 108, 0 rows, 0 FKs). Bible §5: resident auth = WA OTP only; Google OAuth = org-only; no device tracking in resident PWA. See §Auth-Routing for full D-0759 details. |
@@ -2512,6 +2513,22 @@ New portal at /committee (separate route group). Read-only governance views: col
 | D-0558 | 2026-04-11 | refactor | Residents page restructure: Building Structure + CSV Import removed from /bm/residents, UnitsOverviewSection promoted to full-width hero tab. /bm/settings gets new Import Residents card → /bm/settings/import. UnitsOverviewSection + ImportSection exported from BlocksTab.tsx. AddResidentInlineDialog added to UnitsOverviewSection toolbar (name, phone, email, IC, block-grouped unit selector, role). |
 | D-0626 | 2026-04-12 | feat | Resident portal vendor balance + statement PDFs. See detail below. |
 | D-0627 | 2026-04-12 | feat | BM dashboard vendor ageing widget — precise Advelsoft counts with Minilab fallback. See detail below. |
+
+### D-0867 — V43-D8-S2a — Notices + tender rewires + parcel removal
+**Date:** 2026-04-23
+**Context:** S2a of the V43 D8 PWA push series. S1a+S1b shipped push infra, card grid, settings. S2a ships the notices consumer + 2 resident hub tile rewires + parcel tile removal.
+**Decision:**
+- GET : phone-based resident resolution (same S1a pattern). Returns published announcements for all resident buildings, including building_name.
+- : fixed inset-0 modal matching hub pattern. Skeleton loading, empty state with Bell icon, per-item expand/collapse. timeAgo() helper (MYT relative). Building name shown when resident spans multiple buildings.
+- :  added to PushCategory.
+- BM announcements PATCH:  flag captures first draft→published transition; fires  with category , tag , url .
+- BM announcements POST: fires  when  on create. Both fire-and-forget via void/.catch.
+- : accepts async  (Next.js 15), passes  to ResidentCardGrid.
+- :  prop; on mount, if set,  to  — one-tap from push notification to open notices modal.
+- :  + effect auto-opens modal from  param after unit loads. SERVICES: parcel tile removed; butler relabelled 'Hire Contractor' with Hammer icon and updated WA text ('I want to post a job for a contractor at unit X'). Notices tile → . Tenders tile → . NoticesScreen + TendersScreen added to wiredScreens.
+- : in-app modal. Fetches . Status badge (draft/open/awarded/completed/cancelled), bid count, created date. Empty state references 'Hire Contractor'. No tender creation form (deferred).
+- Parcel DB table untouched. BM/guard parcel logic untouched.
+**Files:** lib/push/send.ts, app/api/resident/announcements/route.ts, components/resident/NoticesScreen.tsx, components/resident/TendersScreen.tsx, app/api/bm/announcements/route.ts, app/api/bm/announcements/[id]/route.ts, app/resident/page.tsx, components/resident/ResidentCardGrid.tsx, app/resident/unit/[unitId]/page.tsx
 
 ### D-0865 — V43-D8-S1b — Resident card grid landing + settings screen
 **Date:** 2026-04-22
