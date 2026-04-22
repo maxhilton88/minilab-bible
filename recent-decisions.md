@@ -40,6 +40,7 @@
 | D-0728 | 2026-04-17 | fix | Enforced face-only clock-in across both attendance surfaces per bible §5: (1) AttendanceKiosk (/guard kiosk) — ripped 'staff_list' state and all manual name-picker flow; department buttons now filter-only (read-only roster, no onClick); primary CTA is "Scan Face to Clock In"; 3 consecutive scan failures show admin re-enroll message, no manual fallback. (2) /attendance PWA — removed 'manual' step, openManualClockin, name search UI, Manual Clock-in buttons (scanning + error screens); scanFailCount via ref (stable callback); after MAX_SCAN_FAILURES shows "visit guard kiosk or contact admin" message. (3) /api/attendance/clock — added FACE_REQUIRED guard (403 if verification_method≠'face') and FACE_MATCH_TOO_WEAK guard (403 if face_match_score<0.5); resolvedMethod hardcoded to 'face'; historical rows untouched. 0 TS errors. |
 | D-0856 | 2026-04-22 | fix | V43-N1 Part A+B: blocking face enrollment on all 3 photo upload paths + BM face backfill tool. See detail below. |
 | D-0858 | 2026-04-22 | fix | V43-N1-hotfix: face backfill 0/30 — browser cache CORS taint. Cache-bust in FaceBackfillButton + crossOrigin="anonymous" on 4 staff photo img tags + §5 permanent rule. |
+| D-0859 | 2026-04-22 | fix | V43-N1-hotfix-2: Revert rendering-tag crossOrigin="anonymous" (broke avatars — R2 returns access-control-allow-origin: null). Correct §5 Image CORS rule: never on rendering tags; cache-bust + in-code crossOrigin for pixel-read only. |
 
 **D-0728** (2026-04-17) — Enforce face-only clock-in across all attendance surfaces per bible §5.
 - **Root cause (D-0329/D-0338 legacy):** Manual clock-in as a fallback was introduced early but bible §5 explicitly prohibits it. Both AttendanceKiosk (/guard kiosk) and /attendance PWA still contained manual name-picker flows and buttons; /api/attendance/clock accepted any `verification_method`.
@@ -70,6 +71,13 @@
 - **Fix 3 (permanent rule):** Added Image CORS rule to CLAUDE.md §5: any R2 image that may be pixel-read by client-side code must have `crossOrigin="anonymous"` on first render; cache-bust with `?_cb=Date.now()` if loading an already-cached URL with crossOrigin.
 - **0 TS errors. No schema changes. No migration.**
 - **Files:** `components/bm/staff/FaceBackfillButton.tsx`, `app/bm/staff/all/page.tsx`, `components/attendance/AttendanceKiosk.tsx`, `app/bm/cases/CasesClient.tsx`, `CLAUDE.md`, `docs/startup/recent-decisions.md`
+
+**D-0859** (2026-04-22) — V43-N1-hotfix-2: Revert rendering-tag crossOrigin, correct Image CORS rule.
+- **Problem:** D-0858 Fix 2 added `crossOrigin="anonymous"` to 5 rendering `<img>` tags as a "preventive" measure. R2's current CORS config returns `access-control-allow-origin: null` for those requests → browser rejects the image load entirely → all staff avatars showed broken placeholders across `/bm/staff/all`, `/bm/cases`, and attendance kiosk.
+- **Fix:** Remove `crossOrigin="anonymous"` from all 5 rendering tags: `app/bm/staff/all/page.tsx` (×2), `components/attendance/AttendanceKiosk.tsx` (×2), `app/bm/cases/CasesClient.tsx` (×1). Cache-bust in `FaceBackfillButton.tsx` left intact — it works.
+- **Rule corrected in CLAUDE.md §5:** Never add `crossOrigin="anonymous"` to rendering `<img>` tags. Client-side pixel-read code must (a) append `?_cb=<timestamp>` cache-bust AND (b) set `crossOrigin="anonymous"` on the `<img>` it constructs in code — not on any shared rendering tag.
+- **0 TS errors. No schema changes. No migration.**
+- **Files:** `app/bm/staff/all/page.tsx`, `components/attendance/AttendanceKiosk.tsx`, `app/bm/cases/CasesClient.tsx`, `CLAUDE.md`, `docs/startup/recent-decisions.md`
 
 ### Attendance Architecture (D-0338–D-0350, V20 D-0345 batch)
 Multi-session attendance (unlimited in/out pairs per day). Face IS identity — no manual clock-in, no name dropdown, no fallback. All attendance reads via Postgres RPCs (get_attendance_today, get_attendance_history, find_open_attendance, count_today_sessions, get_attendance_today_by_staff, get_attendance_history_by_staff). NEVER use PostgREST .from('attendance_logs'). All times in MYT (Asia/Kuala_Lumpur). Date boundaries computed in Postgres. Migration 058 fixed NULL user_id bug in 4 RPCs. Cache-Control headers + fetch cache:'no-store' on supabaseAdmin prevent stale reads.
