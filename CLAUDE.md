@@ -1,5 +1,5 @@
 # CLAUDE.md — Minilab Platform
-<!-- Version: V36 · 2026-04-19 -->
+<!-- Version: V42 in_flight · 2026-04-22 -->
 <!-- THIS IS THE ONLY FILE READ AT STARTUP. Everything else is lazy-loaded via the Router. -->
 
 ---
@@ -176,6 +176,16 @@ Visitor status lifecycle:
 - `visitors.status`: `active` → (`checked_in` → `checked_out` | `expired`)
 Guard check-in MUST set `status='checked_in'`; checkout MUST set `status='checked_out'`.
 
+Sidebar / route permission gates must reference keys defined in lib/auth/permissions.ts PERMISSIONS catalog. Default-deny on undefined keys silently hides UI without warning (origin: V41-S4 — staff sidebar had approvals.manage ghost key, default-denied, Approvals tab invisible). If you add a new gated surface, confirm the permission string exists in the catalog before shipping. Consider startup lint to fail build on undefined keys.
+
+Silent-infra-failure detection: when a feature fails and shares infrastructure with other features, check ALL others using the same infra. A silent failure in shared infra (embedder, classifier, vision, router, auth) is invisible until one feature makes it loud. Origin: V41-S3 — T9 capture crashed on dim mismatch; document_chunks had been 0 rows since V40-S3 across ALL KB usage, undetected because no user flow exercised retrieval until T9 tried to write.
+
+Identity-shaped UI fields default to building scope: Signatures, names, avatars, and other "whose voice is this reply?" fields default to building-scoped rows with personalization tokens (e.g. `{{staff_name}}`), not per-user rows — unless there's a hard compliance requirement for per-user. Per-user fields of this shape become targets for shared-session cross-writes (D-0828 shipped per-user `users.email_signature`; when Asha logged in on HZH's front-desk PC her edits overwrote HZH's row — V41-S7 / D-0832 reverted to `buildings.email_footer_template`).
+
+Per-feature Save buttons live visually inside the section they save — never floating at page footer across multiple unrelated sections. A settings page with email config + SMS config + branding should have 3 Save buttons, each inside its own card. Origin: V41 — Asha's signature confusion: one footer Save saved all sections at once, edits to wrong field were ambiguously attributed to the visible save action.
+
+DashScope text-embedding-v3 native dim = 1024. Compatible-mode supports {512, 768, 1024} only. NEVER use 1536 (that's OpenAI text-embedding-3-small, different provider). All pgvector columns on embedding-producing tables are vector(1024). All HNSW indexes are ops=vector_cosine_ops. Origin: V41-S3g — document_chunks + bm_reply_exemplars + media_search_index migrated from 1536→1024 in migration 118.
+
 ---
 
 ## §6 · Closing Block (every session end — no exceptions)
@@ -195,9 +205,11 @@ Guard check-in MUST set `status='checked_in'`; checkout MUST set `status='checke
 
 ## §7 · Current State
 
-Version: V38 closed (2026-04-20) · V39 open
-Database: 180 tables · migrations 001-113
-Pages: 344 · API routes: 576 · Decisions: D-0780 latest · Portals: 17+
+Version: V42 in_flight · V41 closed 2026-04-21
+Database: 186 tables · migrations 001-121
+Pages: 347 · API routes: 602 · Decisions: D-0846 latest · Portals: 17+
+Live task board: /bibble · State API: /api/bibble/state · Raw docs: /bibble/raw/*.md · Doc manifest: /api/bibble/docs
+V42 in flight — ALL priorities, scenarios, remarks live at /bibble. This §7 no longer tracks pending items (moved to bibble_tasks table per D-0834). Historical session summaries preserved below for context.
 
 V37 shipped D-0755 through D-0768 (14 decisions) — full visitor pre-registration feature + major platform hardening cycle.
 
@@ -237,40 +249,87 @@ Three new class-killing helpers this cycle:
 - lib/messaging/classify-delivery-failure — failure category single source of truth
 - lib/messaging/delivery-failed-patch — DB update shape for failed sends
 
-V39 active priorities:
-- V38-S4: UI tick truth + rename delivered→sent (deferred — needs more webhook data first)
-- 24h window pre-send block (prevent 131047 instead of surfacing it post-fail)
-- 887 stale active visitors backlog (pre-V38-S2 stuck rows)
-- R1 observation accumulation continues (CHV AI ON since 2026-04-18)
-- A1 AI audit rules engine (blocked on R1 traffic volume)
-- PWA push infrastructure (web-push install → VAPID → SW handler → subscribe UI → notifyVisitorArrivalPwa)
+V39 shipped D-0781 through D-0788 (8 decisions) — WhatsApp AI audit + Jarvis infrastructure recon + strategy handover. Discovery session, no code changes.
 
-Deferred (not P0):
-- Haiku 4.5 model migration (pending CHV traffic evidence)
-- WA/TG automated sender filter (B4 was email-only)
-- MOA Phase 2 CHV walkthrough recon
-- FIX-1B resolveUser silent 'bm' default hardening
-- V32b VMS floor-3 blindspot (needs device screenshot)
-- V32c GQ ground-floor notation (fold into V32b)
-- Guard fraud detection (defaulters + guards pressing random numbers)
-- building_payment_settings duplicate table audit
-- Dead code cleanup (composeVisitorArrivalMessage, VISITOR_TYPE_PHRASE, PURPOSE_TO_CATEGORY in send.ts — orphaned after D-0754)
-- Compose bar recipient selector UI polish (beyond V38-S1 fix)
-- Committee login UX decision
-- Expected-visitors-today view for guards
-- Notification workstream (arrival notify + invite-submitted notify — blocked on PWA push)
+V39 accomplishments:
+- D-0781: WhatsApp /ai-activity audit — 22 issues across 9 categories identified (silent drops, unimplemented handlers, enum hallucination, latency, DeepSeek bypass)
+- D-0782: Jarvis infrastructure recon — RAG framework fully built but dormant (document_chunks 0 rows across all buildings)
+- D-0783: Framing rule locked — Jarvis for Building is north star; deletion of tool surfaces as a fix is forbidden
+- D-0784: /ai-activity page confirmed public by design (intentional operational trade-off, no auth gate)
+- D-0785: KB architecture decided — user-defined free-form sections + entries (text or doc upload); schema choice pending V40 Opus validation
+- D-0786: create_legal_signal_case orphan handler to be deleted in V40 hygiene batch
+- D-0787: 11 write-action handlers deferred to V40+; get_payment_instructions (thin) brought to V39 execution
+- D-0788: Session bootstrap system established — MINILAB-BOOTSTRAP.md + V39-HANDOVER.md (saved locally by Max)
 
-Key contacts: Seeteng (Lumi test user), Hoe Zee How (CHV BM, 712 units, AI active)
+V40-S1 shipped D-0789 (1 decision) — WA webhook + admin pipeline silent-drop instrumentation.
+V40-S3 shipped D-0790 through D-0793 (4 decisions) — KB infrastructure + MOA schema + OpenAI purge.
+V40-S5 shipped D-0796 through D-0799 (4 decisions) — MOA toggle UI + plate/card intents + approvals extension.
+V40-S6 shipped D-0800 through D-0806 (7 decisions) — hygiene batch: enum validation, thin handlers, credential vault, orphan delete, synthetic intent doc, console guard.
+V40-S7 shipped D-0807 through D-0808 (2 decisions) — building_working_hours in §3 + KB pre-fetcher for 3 intents.
+V40-S8 shipped D-0809 through D-0814 (6 decisions) — guard/cleaner/task/resident/timeline/listing handlers + 8 dead handlers removed.
+V40-S7b shipped D-0815 through D-0818 (4 decisions) — incidents + cleaning complaints UI on VMS + Guard PWA + Cleaner PWA.
+
+V40-S3 accomplishments:
+- D-0793: OpenAI embedder purged — lib/documents/embedder.ts fully rewritten to DashScope text-embedding-v3; platform single-vendor
+- D-0792: unit_vehicles + unit_access_cards tables + buildings.is_moa_active (migration 114)
+- D-0791: MOA task queue architecture decision — reuses approvals table, approval_type extends in S5
+- D-0790: building_kb_entries table + lib/kb/indexer.ts + BM KB CRUD API (5 routes) + ai_view_kb + document_chunks.kb_entry_id link-back
+
+V40-S6 accomplishments:
+- D-0800: createCase enum validation + 28-entry coercion map; unknown values fall to 'other'; DB never rejects silently
+- D-0801: get_payment_instructions thin handler reads building_payment_settings (actual columns); closes 1 weekly CHV failure
+- D-0802: find_open_case thin handler; lookup by case_number or resident_id; closes 2 weekly COMPLAINT_FOLLOWUP failures
+- D-0803: DEEPSEEK_API_KEY moved from process.env to credential vault in column-mapper.ts + auto-register.ts
+- D-0804: create_legal_signal_case orphan handler deleted (confirmed zero callers)
+- D-0805: ADMIN_COMMAND synthetic intent documented in INTENT_DEFINITIONS for audit completeness
+- D-0806: resolveTarget null-phone warn + handleSend early-return toast; silent null-send drops closed
+
+V40-S8 shipped D-0809 through D-0814 (6 decisions) — guard/cleaner/task/resident/timeline/listing handlers + 8 dead handlers removed.
+V40-T9 shipped D-0819 through D-0822 (4 decisions) — adoptive learning: bm_reply_exemplars capture + retrieval + §4.6 injection.
+V41-S3d shipped D-0823 (1 decision) — DashScope endpoint → intl region (Singapore API key accepted).
+V41-S3f shipped D-0824 (1 decision, reverted) — T9-TRACE diagnostic logs (removed in S3g).
+V41-S3g shipped D-0825 (1 decision) — DashScope native dim 1024 fix: migration 118 (3 columns + 5 indexes + 2 RPCs), embedder.ts 1536→1024, T9 traces stripped, bm.ts dead generateEmbedding deleted.
+
+V41-S4 shipped D-0827 through D-0829 (3 decisions) — BM console email reply unblocked at CHV: channel-aware send guard (D-0827) + per-user email signature with auto-prefill into console compose (D-0828, migration 119, **superseded by V41-S7 / migration 120**) + /bm/settings/email layout left-aligned full-width (D-0829).
+
+V41-S7 shipped D-0832, D-0833 (2 decisions) — per-user email signature (D-0828) replaced with building-level email footer template. Migration 120 drops `users.email_signature*`, adds `buildings.email_footer_template` + `buildings.email_footer_enabled`. Console prefill interpolates `{{staff_name}}` from session full_name — fixes cross-user write bug (Asha writing into HZH's row on shared front-desk PC). UI: new "Email Footer" card at /bm/settings/email with live preview of interpolated output.
+
+V42-S0.5 shipped D-0834 through D-0846 (13 decisions + 1 migration) — infrastructure for live task board + session-start state API.
+V42-S0.5 accomplishments:
+
+- D-0834/D-0835/D-0836: /bibble live task board built — migration 121 (bibble_tasks, bibble_task_remarks, bibble_meta), 36 seed tasks across V42/MOA/V43/V50 lanes, public JSON state API, raw .md doc serving, lib/bibble/log.ts helpers for closing-block auto-sync, §2 Session Protocol updated to fetch state API first
+- D-0837: Middleware hotfix — excluded /bibble + /api/bibble from CSRF/auth gates (mirrored /ai-activity public pattern)
+- D-0839/D-0840: robots.txt explicit Allow for /bibble + /api/bibble + /ai-activity + /api/ai-activity, removed blanket Disallow: /api/ (was conflicting with Allow: /api/bibble/ under strict parsers)
+- D-0846: /bibble/raw/*.md serving via public/bibble-docs/ prebuild sync (Vercel wouldn't bundle docs/startup/*.md into serverless functions) + /api/bibble/docs manifest endpoint + docs[] key on state response
+
+V42-S1 shipped D-0841 through D-0845 (5 decisions) — four-bug production batch.
+V42-S1 accomplishments:
+
+- D-0841: Gemini model swap — gemini-1.5-flash-8b deprecated, gemini-2.0-flash also 404 on current key, landed on gemini-2.5-flash. maxOutputTokens 400→1024 (2.5-flash verbose JSON). Verified live against CHV approval 384c44d2 (Maybank RM717.70, confidence 1.00). PDF + image receipt extraction restored.
+- D-0842: Email sentiment_score crash fixed — confidence.ts:123 reading senderProfile.behavioral_state.sentiment_score without guarding behavioral_state. 5+ CHV profiles had state_json but no behavioral_state. Inner guard + conditional init in profile-updater.ts. Pipeline continues with neutral default 80.
+- D-0843: B4 recon — image-no-caption skip root-caused at route.ts:434 (media_no_text fires BEFORE runV4Pipeline; describeImage at v4-pipeline:605 never reached).
+- D-0844: routing_analytics silent catches — 11 sites in v4-pipeline.ts replaced empty .catch(() => {}) with Sentry.captureException. Fire-and-forget semantics preserved. Main logRoutingDecision at line 891 already had Sentry from D-0789 (untouched).
+- D-0845: B4 fix shipped — media_no_text guard tightened from !messageText to !messageText && (msg.type !== 'image' || !persistedMediaUrl). 2-line change, 1 file. Audio/doc/video still skip. No-caption images now feed Gemini 2.5-flash vision path.
+
+Pending items now tracked exclusively in bibble_tasks. Query current state:
+GET /api/bibble/state → returns tasks[] with full scenario + fix_proposal + remarks
+GET /api/bibble/tasks?session=V42 → V42 lane only
+GET /api/bibble/tasks?status=READY → anything ready to pick up
+Key contacts preserved here (not task-shaped):
+
+Seeteng (Lumi test user — second-building E2E test)
+Hoe Zee How (CHV BM, 712 units, AI active, MOA walkthrough owner)
 
 ---
 
 ## §8 · Doc Inventory
 
 docs/startup/ — Working docs (lazy-loaded via §4 Router)
-  actual-schema-columns.md    148KB  Anchored by §Table-{name}
-  recent-decisions.md         351KB  Anchored by §Feature-Area
+  actual-schema-columns.md    165KB  Anchored by §Table-{name}
+  recent-decisions.md         490KB  Anchored by §Feature-Area
   env-required.md             6.4KB  Small — OK to read fully
   GRAPH_REPORT.md             9.8KB  Anchored by §Community / §God-Nodes
+(Note: all docs/startup/*.md files also serve live at https://minilab.my/bibble/raw/<slug> — synced every build by scripts/sync-bibble-docs.js)
 
 docs/ — Archive (touch only when Router points here)
   decisions.log               429KB  Raw D-0001+ (not anchored)

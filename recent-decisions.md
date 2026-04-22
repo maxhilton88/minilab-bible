@@ -203,6 +203,16 @@ No exceptions. Applies to all RPCs including attendance, face matching, and any 
 | D-0802 | 2026-04-21 | fix | V40-S6 · `find_open_case` thin handler added to `lib/ai/actions/complaints.ts`. Registered in executor.ts as `find_open_case`/`FIND_OPEN_CASE`. Queries `cases` where `building_id=ctx.buildingId` AND `status IN ('open','in_progress','pending')`, filtered by `payload.case_number` (exact match) OR `ctx.residentId` (FK lookup). Returns `{ cases: [{ id, case_number, status, title, created_at, updated_at }] }`. Closes 2 weekly COMPLAINT_FOLLOWUP failures where executor received the action but had no handler registered. No migration. TS errors: 0. Files: `lib/ai/actions/complaints.ts`, `lib/ai/actions/executor.ts`. |
 | D-0801 | 2026-04-21 | fix | V40-S6 · `get_payment_instructions` thin handler added to `lib/ai/actions/payments.ts`. Registered in executor.ts as `get_payment_instructions`/`GET_PAYMENT_INSTRUCTIONS`. Reads `building_payment_settings` for `ctx.buildingId`, selecting actual columns: `bank_name`, `bank_account_name`, `bank_account_number`, `payment_mode`, `receipt_footer_text`. Returns `{ bank_name, account_name, account_number, payment_mode, footer_note }`. Closes 1 weekly PAYMENT_ENQUIRY failure at CHV where the intent routed correctly but the action had no handler. Columns `reference_format`, `ezpay_url`, `contact_phone` do NOT exist in the actual table schema — spec was stale. No migration. TS errors: 0. Files: `lib/ai/actions/payments.ts` (new), `lib/ai/actions/executor.ts`. |
 | D-0800 | 2026-04-21 | fix | V40-S6 · `createCase` enum validation + coercion map added to `lib/ai/actions/maintenance.ts`. `VALID_CASE_CATEGORIES` const defines the 10 valid `case_category_type` enum values. `CATEGORY_COERCION` record maps 28 common AI-hallucinated values (plumbing, leak, water, electrical, aircon, noise, etc.) to correct enum members. `coerceCategory(raw)` returns VALID match → as-is, COERCION_MAP hit → corrected value, unknown → `'other'`. Prevents silent DB rejects from AI hallucinated category strings. No migration. TS errors: 0. Files: `lib/ai/actions/maintenance.ts`. |
+
+### D-0830 · Killed wa_visitor_notify_disabled_by_design logging
+**Problem:** 80% of ai_pipeline_runs rows were config-gate skips from WA visitor notify disabled-by-design path. Config-gate skip no longer written (D-0830)
+**Fix:** Config-off early-exit no longer writes to ai_pipeline_runs at all. Sender profile + message persistence unaffected. Webhook still returns 200.
+**File:** app/api/webhooks/whatsapp/route.ts
+**Observability net:** Noise reduced ~80%. /ai-activity feed now shows genuine AI pipeline runs only.
+**Bible rule implication:** ai_pipeline_runs = AI decisions only; config-gate skips belong elsewhere or nowhere.
+
+---
+
 ## §KB-Infrastructure
 <!-- KB tables, indexer, embedder vendor, MOA schema plumbing -->
 
@@ -2759,6 +2769,14 @@ Investigated and confirmed: code is already correct. All 14 `/api/onboard/*` rou
 
 ---
 
+### D-0847 · V42-S0 doc drift fix + V41 bible rule codification
+**Scope:** docs/startup/CLAUDE.md header (V36→V42), §5 (+5 V41 rules), §7 (top+bottom rewritten, V42-S0.5 + V42-S1 narrative blocks added, pending lists removed — now tracked in bibble_tasks), §8 (sizes refreshed, bibble raw-serve note added). docs/startup/recent-decisions.md D-0830 + D-0831 backfilled.
+**Non-scope:** Zero code changes, zero schema, zero env. Pure docs.
+**Drift tackled:** Bible top said V36 despite §7 showing V41 narrative — surfaced on V42-S1 when Max pasted CLAUDE.md body through /bibble/raw.
+**New bible rules shipped:** 5 rules permanently in §5 — sidebar permission catalog reference, silent-infra-failure detection, per-feature Save placement, DashScope native dim 1024. Identity-shaped UI building-scope default verified present from V41-S7.
+
+---
+
 ## §Schema-Migration
 <!-- new tables, migrations, column changes (that are not feature-specific) -->
 
@@ -2928,6 +2946,15 @@ Full end-to-end PWA audit. 34 total fixes:
 **Modified:** `app/bm/layout.tsx`
 
 ---
+
+---
+
+### D-0831 · Email signature textarea UX polish (superseded D-0832)
+**Problem:** Per-user email signature textarea (D-0828) was disabled-until-toggled — users had to flip an enable toggle before they could type. Visual card boundary was ambiguous — looked like part of the next settings section.
+**Fix:** Textarea always editable (save button indicates intent). Card visual separation improved with distinct border + spacing.
+**File:** app/bm/settings/email/page.tsx
+**Status:** Superseded by V41-S7 / D-0832 — entire per-user signature surface replaced with building-level email footer template. This UX polish no longer present in codebase.
+**Why logged anyway:** Audit continuity — V41 S5-HOTFIX-C was a real deploy; decision trail should reflect it even though UI surface no longer exists.
 
 ---
 
