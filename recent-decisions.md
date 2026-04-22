@@ -3324,3 +3324,18 @@ Replaced superadmin session gate on /bibble write routes with shared-password ht
 - `app/api/webhooks/whatsapp/route.ts` — silent exit replaced with logPipelineSkip call
 - `app/api/ai-activity/feed/route.ts` — building_name returns null (not 'Unknown') when building_id is null
 - `app/ai-activity/page.tsx` — building_name: string | null; renders UNROUTED amber pill when null
+
+---
+
+### D-0852 · 2026-04-22 · /bibble — DONE tasks moved to collapsible Completed section
+
+**Change:** Kanban lanes now render only non-DONE tasks (READY, IN_PROGRESS, RECON_NEEDED, BLOCKED). New `CompletedSection` component renders all DONE tasks in a collapsed grid below the 4-lane kanban, sorted by `updated_at DESC`. Lane header counts exclude DONE. DONE cards render dimmed (grayscale + reduced opacity) with hover-to-reveal; clicking still opens the drawer with full scenario + remarks access.
+
+**Why:** Active workspace clarity — V42 lane was cluttered with completed cards after V42-S1 shipped. DONE cards belong out of sight unless explicitly reviewed.
+
+**Reopen flow:** Click DONE card → drawer → change status pill. DONE cards live outside the `@dnd-kit/sortable` context so no drag-drop needed for that flow.
+
+**Files changed:**
+- `components/bibble/BibbleKanban.tsx` — partition activeTasks/doneTasks, tasksForColumn filters from activeTasks, CompletedSection rendered below kanban
+- `components/bibble/CompletedSection.tsx` — new collapsible section, collapsed by default, sorted by updated_at DESC
+- `components/bibble/BibbleCard.tsx` — optional `dimmed` prop: grayscale + opacity-60 with hover reveal
