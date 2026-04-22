@@ -3205,3 +3205,19 @@ Matcher comment added noting bibble/ai-activity are intentionally excluded.
 **Root cause:** Anthropic's web_fetch parser uses last-match-wins semantics. Even with explicit `Allow: /api/bibble/` entries, the subsequent `Disallow: /api/` was overriding them, preventing Claude from fetching `/api/bibble/state`.
 
 **Security note:** Real security on `/api/*` routes is middleware auth (requirePermission, getSession), not robots.txt hiding. Removing the disallow has no security impact — unauthenticated crawlers were never the threat model for API routes.
+
+---
+
+### D-0846 · 2026-04-22 · HOTFIX-6 — fixed /bibble/raw/*.md 404 in production
+
+**Decision:** Fixed all `/bibble/raw/*.md` routes returning 404 on Vercel. Root cause: `docs/startup/*.md` files are not included in Vercel serverless function bundles — only `public/` is copied verbatim.
+
+**Fix:** Strategy A — prebuild sync to `public/bibble-docs/`:
+- Created `scripts/sync-bibble-docs.js`: copies CLAUDE.md, recent-decisions.md, actual-schema-columns.md, env-required.md, GRAPH_REPORT.md, MOA-SPEC.md from their source paths into `public/bibble-docs/` on every build.
+- Added `"prebuild": "node scripts/sync-bibble-docs.js"` to `package.json` — Vercel runs this before `next build`.
+- Rewrote `app/bibble/raw/[...slug]/route.ts` to read from `public/bibble-docs/[slug]` instead of original doc paths. Preserves path-traversal guard, Content-Type: text/markdown header, ALLOWED allowlist.
+- Fixed bug: MOA-SPEC.md was mapped to `docs/MOA-SPEC.md` (does not exist) — actual location is `docs/startup/MOA-SPEC.md`. Corrected in sync script.
+
+**Also added:**
+- `app/api/bibble/docs/route.ts`: public manifest endpoint returning JSON list of all 6 served docs with slug + title + url. Lets Opus discover available docs without guessing filenames.
+- `app/api/bibble/state/route.ts`: added `docs` key to response so a single state call surfaces the full doc manifest.
