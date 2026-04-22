@@ -110,6 +110,7 @@ visitor_invite_ttl_hours (integer, NOT NULL, DEFAULT 24, CHECK 2-168),  -- Migra
 is_moa_active (boolean, NOT NULL, DEFAULT false),  -- Migration 114: Jarvis-for-Building toggle per property
 email_footer_template (text, nullable),  -- Migration 120 (D-0832): plain-text email footer auto-appended to console email replies; supports {{staff_name}} token
 email_footer_enabled (boolean, default false),  -- Migration 120: when true, footer auto-prefills into compose box for email replies
+facility_booking_enabled (boolean, NOT NULL, DEFAULT false),  -- Migration v43_d8_s3 (D-0869): per-building toggle; hides facility tile from resident PWA when false; BM management UI always accessible
 created_at, updated_at
 ```
 **NOT present:** latitude, longitude, latitude_lng (no geo columns at all)
@@ -316,9 +317,12 @@ generic_read key: `visitor_invites` → `ai_view_visitor_invites`.
 ### facilities
 ```
 id, building_id, name, description, capacity, opening_time, closing_time,
-advance_booking_days, max_booking_hours, deposit_amount, rules, is_active,
-created_at, updated_at
+advance_booking_days, max_booking_hours, deposit_amount, rules,
+approval_mode (text NOT NULL DEFAULT 'manual', CHECK IN ('auto','manual')),  -- D-0869: auto = confirmed immediately, manual = BM must approve
+concurrent_slots (integer NOT NULL DEFAULT 1, CHECK >= 1),  -- D-0869: parallel bookings allowed (e.g. 3 BBQ pits)
+is_active, created_at, updated_at
 ```
+**RPC create_facility_booking:** `(p_building_id, p_facility_id, p_resident_id, p_booking_date, p_start_time, p_end_time, p_guests_count, p_purpose)` — atomic slot guard with SELECT FOR UPDATE; raises `facility_not_found` or `slot_full`. Returns facility_bookings row with status set from approval_mode.
 
 ## §Table-facility_bookings
 ### facility_bookings

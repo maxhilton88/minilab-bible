@@ -3565,3 +3565,32 @@ Replaced superadmin session gate on /bibble write routes with shared-password ht
 **Permanent rule added to CLAUDE.md §5:** All future migrations must be idempotent: `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `DROP POLICY IF EXISTS` before every `CREATE POLICY`, `DROP TRIGGER IF EXISTS` before every `CREATE TRIGGER`. Re-running any migration file must never fail or leave the DB in a partial state.
 
 **Files changed:** `supabase/migrations/124_ai_health_alerts.sql`, `CLAUDE.md` (§5 new rule).
+
+## §Facility-Bookings
+
+**D-0869 — V43 D8.S3a: Facility schema extend + API fixes + channel gate + BM UI (2026-04-23)**
+
+Migration `v43_d8_s3_facility_extend` applied to prod:
+- `buildings.facility_booking_enabled` (boolean NOT NULL DEFAULT false) — per-building master toggle; resident API gates on this; hides facility tile when false; BM management UI always accessible
+- `facilities.approval_mode` (text NOT NULL DEFAULT 'manual', CHECK IN ('auto','manual')) — per-facility booking policy; auto = booking goes straight to confirmed; manual = requires BM approve/reject
+- `facilities.concurrent_slots` (integer NOT NULL DEFAULT 1, CHECK >= 1) — parallel booking count (e.g. 3 BBQ pits); RPC uses FOR UPDATE lock to prevent race
+- `idx_facility_bookings_overlap` — partial index on (facility_id, booking_date, status) WHERE status IN ('pending','confirmed') for slot-count query
+- RPC `create_facility_booking(p_building_id, p_facility_id, p_resident_id, p_booking_date, p_start_time, p_end_time, p_guests_count, p_purpose)` — atomic slot guard: SELECT FOR UPDATE on facility row, COUNT overlapping bookings, raise exception on slot_full or facility_not_found, insert with status from approval_mode
+
+**API fixes:**
+- GET `/api/resident/facilities` — removed phantom columns `operating_hours`/`booking_rules`; now selects real columns; adds computed `operating_hours` string ("7:00 AM – 10:00 PM"); returns `facility_booking_enabled: false` with empty array if toggle off
+- POST `/api/resident/facilities` — removed phantom `unit_id` insert; now calls RPC; validates advance_booking_days, max_booking_hours, operating hours; translates `facility_not_found`→404, `slot_full`→409; returns `status` from RPC (auto-mode gets `confirmed` immediately)
+- PATCH `/api/bm/facilities/bookings` — approve/reject now fires push (always, fire-and-forget via `sendPushToUser`); WhatsApp gated by `buildingHasApprovedTemplate(kind)`; existing WA helper (`sendOrQueue`) preserved and its message content unchanged; `console.log` audit line on every decision
+
+**New files:**
+- `lib/notifications/channel-gate.ts` — `buildingHasApprovedTemplate(buildingId, kind)` looks up `whatsapp_templates` table; returns true only if `approval_status='approved'` for the kind's template name
+- `lib/push/send.ts` — `PushCategory` union now includes `'facility_booking'` (was in reserved comment)
+- `app/api/bm/settings/facility-booking/route.ts` — GET/PATCH for `buildings.facility_booking_enabled`; requires `settings.edit` permission
+
+**BM UI:**
+- `app/bm/layout.tsx` — Facilities entry (Dumbbell icon) added to Operations section, links to `/bm/facilities`
+- `app/bm/settings/apps/page.tsx` — "Online Facility Bookings" card with toggle writing `facility_booking_enabled` via new endpoint; copy explains BM management is always accessible
+- `components/bm/tabs/FacilitiesTab.tsx` — form now includes approval_mode radio (Require manual approval default / Auto-approve) + concurrent_slots integer input with help text; facility list cards show emerald Auto-approve / amber Manual approval / slate × N units badges
+- `app/api/bm/facilities/route.ts` — GET now returns `approval_mode` + `concurrent_slots`; POST/PATCH accept and write both fields
+
+**Rule:** Push is always primary for resident booking notifications; WhatsApp send is gated on `whatsapp_templates.approval_status = 'approved'` for the relevant kind. Existing WA helpers must never be removed or rewritten — only gated.
