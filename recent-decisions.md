@@ -3279,3 +3279,27 @@ Reconcile root `CLAUDE.md` — merge, do NOT overwrite:
 2. §5: insert 4 missing V41 rules after "Visitor status lifecycle" block (sidebar permissions, silent-infra-failure, per-feature Save, DashScope dim 1024)
 3. §7: update "Decisions: D-0844 latest" → "D-0848 latest" in Current State header
 After fix: push → Vercel rebuild → prebuild copies corrected root CLAUDE.md into `public/bibble-docs/` → `/bibble/raw/CLAUDE.md` shows V42 header.
+
+---
+
+### D-0849 · 2026-04-22 · HOTFIX-7 Root A reconcile + HOTFIX-8 password gate
+
+**Part 1 — Root A fix (HOTFIX-7):**
+Root `CLAUDE.md` reconciled from V36 → V42. Changes applied:
+1. Line 2 version comment: `<!-- Version: V36 · 2026-04-19 -->` → `<!-- Version: V42 in_flight · 2026-04-22 -->`
+2. §5 Hard Rules: appended 4 missing V41 rules — sidebar permission catalog reference, silent-infra-failure detection, per-feature Save placement, DashScope text-embedding-v3 native dim = 1024.
+3. §7 Current State: version block updated to `V42 in_flight · V41 closed 2026-04-21`, `D-0849 latest`, 186 tables, raw docs + doc manifest URLs added.
+4. **Option B chosen** for single-source-of-truth: `scripts/sync-bibble-docs.js` now also copies root `CLAUDE.md` → `docs/startup/CLAUDE.md` on every prebuild. Every Vercel deploy keeps both in sync automatically. (Symlink not used — Windows contributors would break on `readlink`.)
+
+**Part 2 — Password gate on /bibble writes (HOTFIX-8):**
+Replaced superadmin session gate on /bibble write routes with shared-password httpOnly cookie. Max can now unlock writes from any device without logging into /bm.
+
+- **New env var:** `BIBBLE_WRITE_PASSWORD` — shared password, set in Vercel dashboard. Writes fail closed (401) if unset.
+- **New route:** `GET/POST/DELETE /api/bibble/unlock` — GET checks cookie, POST verifies password + sets 30-day httpOnly cookie, DELETE clears it.
+- **New helper:** `lib/bibble/auth.ts` — `isBibbleUnlocked()` reads the cookie.
+- **3 routes updated:** `tasks/route.ts` POST, `tasks/[id]/route.ts` PATCH+DELETE, `tasks/[id]/remark/route.ts` POST — all replaced `getSession() + role !== 'superadmin'` with `isBibbleUnlocked()`.
+- **UI:** 🔒/🔓 pill in /bibble header. Locked → click opens password modal (Enter submits). Unlocked → click locks. Add task button only shown when unlocked. BibbleCard drag disabled when locked. BibbleDrawer patch controls + delete/archive gated by `unlocked`. BibbleRemarks: locked shows "Unlock to add remarks" button that auto-opens unlock modal.
+
+**Follow-up for Max:** Set `BIBBLE_WRITE_PASSWORD` in Vercel env → redeploy → test unlock flow.
+
+**Note:** Claude Code closing-block writes use `supabaseAdmin` directly — bypass HTTP layer entirely, unaffected by this gate.

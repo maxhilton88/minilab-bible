@@ -71,6 +71,7 @@
 | `VAPID_PRIVATE_KEY` | Web Push private key — server side only |
 | `VAPID_SUBJECT` | Push sender identity — set to mailto:tech@minilab.my |
 | `DISABLE_DEV_LOGIN` | Set to `true` to disable the /dev/login page in production. Safe to omit — defaults to enabled. |
+| `BIBBLE_WRITE_PASSWORD` | Shared password to unlock /bibble writes. No effect on reads (public). Writes fail closed (401) if unset. Max sets this in Vercel dashboard. |
 | `PREVIEW_BYPASS_SECRET` | Local dev only — allows Claude Code Preview tool to bypass auth via `/api/dev/preview-session`. NEVER set in Vercel. |
 | `CRON_SECRET` | Protects cron endpoints from unauthorised triggers |
 | `SUPERADMIN_PHONE` | Your personal Malaysian mobile — only number that accesses /superadmin |
