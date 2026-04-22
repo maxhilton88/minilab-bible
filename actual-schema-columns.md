@@ -3464,7 +3464,7 @@ Columns: id, building_id, resident_id, unit_id, full_name, role, related_person_
 Source: resident_data_staging (direct select, no joins)
 
 ## §Table-guard_incidents
-### guard_incidents (migration 116, V40-S8)
+### guard_incidents (migration 116, V40-S8; extended migration 126, V43-D8-S2b)
 ```
 id (uuid PK DEFAULT gen_random_uuid()),
 building_id (uuid NOT NULL FK→buildings ON DELETE CASCADE),
@@ -3476,10 +3476,19 @@ description (text NULLABLE),
 priority (text NOT NULL DEFAULT 'normal' CHECK IN ('low','normal','high','urgent')),
 status (text NOT NULL DEFAULT 'new' CHECK IN ('new','acknowledged','resolved')),
 created_at (timestamptz DEFAULT now()),
-updated_at (timestamptz DEFAULT now())
+updated_at (timestamptz DEFAULT now()),
+source (text NOT NULL DEFAULT 'manual'),           -- 'manual' | 'sos' | 'case_escalation'
+handled_by_user_id (uuid FK→users NULLABLE),       -- NULL for guard-tablet-passcode sessions
+handled_at (timestamptz NULLABLE),
+cancelled_at (timestamptz NULLABLE),
+resident_phone (text NULLABLE)                     -- phone snapshot at SOS fire time
 ```
+**Index:** idx_guard_incidents_building_source_status ON (building_id, source, status) WHERE source='sos'
+**Realtime:** in supabase_realtime publication (added migration 126)
 **View:** ai_view_guard_incidents (id, building_id, unit_id, title, description, priority, status, created_at)
-**Purpose:** AI-created security incidents written by `notify_guard` handler. Telegram group ping sent to building's 'security' category group on insert.
+**Purpose:** AI-created security incidents (notify_guard handler) + resident SOS alerts (source='sos').
+**SOS status mapping:** status='new'→pending, status='acknowledged'→handled (handled_at set), status='resolved'+cancelled_at→cancelled by resident.
+**SOS rule:** handled_by_user_id is always NULL for guard-tablet sessions (passcode auth has no user_id). Gate name resolved from building_gates.name via gateId in request body.
 
 ## §Table-cleaning_complaints
 ### cleaning_complaints (migration 116, V40-S8)
