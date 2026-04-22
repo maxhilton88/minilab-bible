@@ -3248,3 +3248,34 @@ Matcher comment added noting bibble/ai-activity are intentionally excluded.
 **Also added:**
 - `app/api/bibble/docs/route.ts`: public manifest endpoint returning JSON list of all 6 served docs with slug + title + url. Lets Opus discover available docs without guessing filenames.
 - `app/api/bibble/state/route.ts`: added `docs` key to response so a single state call surfaces the full doc manifest.
+
+---
+
+### D-0848 · 2026-04-22 · HOTFIX-7 RECON — 3 apparent sync failures after D-0847
+
+**Context:** After D-0847 commit (`21a34442`), live production showed three apparent anomalies: (1) `/bibble/raw/CLAUDE.md` showed V36 header, (2) `/api/bibble/state` reportedly returned `D-0845`, (3) kanban header showed `D-0836` + `task_v42_s0_doc_drift` showed READY.
+
+**Recon findings — 3 roots, only 1 real bug:**
+
+**Root A (REAL BUG) — `/bibble/raw/CLAUDE.md` serves V36 header + missing V41 rules:**
+- `scripts/sync-bibble-docs.js` copies root `CLAUDE.md` → `public/bibble-docs/CLAUDE.md` at Vercel prebuild (correct file, wrong content)
+- D-0847 only updated `docs/startup/CLAUDE.md` (V36→V42 comment, +4 §5 rules) — NOT root `CLAUDE.md`
+- Root `CLAUDE.md` line 2 still reads `<!-- Version: V36 · 2026-04-19 -->` — never updated since V36
+- Root `CLAUDE.md` also missing 4 §5 bible rules added in V41: (a) sidebar permission catalog reference, (b) silent-infra-failure detection, (c) per-feature Save placement, (d) DashScope native dim 1024
+- Root has content that docs/startup/ lacks: BIBBLE SYNC step 11 in §6, 4+ extra §4 Router rows (MOA toggle, KB entries, Guard incidents, Adoptive learning, bibble task board)
+- Every Vercel deploy bakes V36-header + missing-rules root into `public/bibble-docs/`
+
+**Root B (NOT a bug — stale observation):**
+- DB query confirms `bibble_meta.latest_d = 'D-0847'` (written 2026-04-22 00:35:44 UTC, before git push at 01:31:38 UTC)
+- Max's "API returns D-0845" observation predated the DB write — `/api/bibble/state` has `force-dynamic`, no ISR caching. Live API is correct.
+
+**Root C (NOT a bug — stale observation):**
+- DB confirms `task_v42_s0_doc_drift` = DONE, `task_v41_bible_rules` = DONE (both updated 01:32:24 UTC)
+- `BibbleKanban` uses SWR with `fallbackData: initialData` + `refreshInterval: 30000` — kanban D-0836/READY was pre-SWR-refresh snapshot. No fix needed.
+
+**Fix authorized for Root A only (awaiting Opus sign-off):**
+Reconcile root `CLAUDE.md` — merge, do NOT overwrite:
+1. Line 2: update version comment V36 → V42 in_flight · 2026-04-22
+2. §5: insert 4 missing V41 rules after "Visitor status lifecycle" block (sidebar permissions, silent-infra-failure, per-feature Save, DashScope dim 1024)
+3. §7: update "Decisions: D-0844 latest" → "D-0848 latest" in Current State header
+After fix: push → Vercel rebuild → prebuild copies corrected root CLAUDE.md into `public/bibble-docs/` → `/bibble/raw/CLAUDE.md` shows V42 header.
