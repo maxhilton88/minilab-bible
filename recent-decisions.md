@@ -1955,6 +1955,34 @@ Option 1 is likely correct product behavior (nudge the most recently active resi
 
 ---
 
+### D-0861 — AI-Activity identity columns — unit, resident, contact + filter + Open Chat (V43-ai-activity)
+
+**Problem:** `/ai-activity` showed pipeline runs with no identity — Max couldn't tell which resident triggered each run, making AI behaviour auditing opaque.
+
+**Decision:** Enhance `/api/ai-activity/feed` to resolve identity via JOINs (no schema changes) and surface three new columns in the UI, plus a filter bar and Open Chat button.
+
+**API changes (`app/api/ai-activity/feed/route.ts`):**
+- After fetching runs, batch-fetch `sender_profiles` (phone, email, telegram_id, display_name, resident_id) by `sender_profile_id`
+- Batch-fetch `residents` (full_name, unit_id) by resident_id from profiles
+- Batch-fetch `units` (unit_number) by unit_id from residents
+- All LEFT JOIN semantics — runs with NULL sender_profile_id (auto_register, system runs) return NULLs for identity fields
+- New response fields: `unit_id`, `unit_no`, `resident_name`, `sender_display_name`, `contact_phone`, `contact_email`, `contact_telegram_id`
+
+**UI changes (`app/ai-activity/page.tsx`):**
+- Three new table columns inserted after Building: **Unit** (unit_no, monospace), **Resident** (resident_name, falls back to display_name), **Contact** (channel-aware: phone last 4 for WA, email local-part for email, telegram_id last 6 for TG; full value on hover)
+- Filter bar above table: unit no (contains), phone last 4 (suffix match), email (contains), resident name (contains). Clear button appears when any filter active. Header shows "showing N" count when filtered.
+- **Open Chat** button (rightmost column): links to `/bm/console?unit_id={unit_id}`, opens in new tab. Disabled/grey with tooltip "No unit linked" when unit_id is null (auto_reg runs, unknown callers). Click stops row-expand event propagation.
+- Expanded detail panel: IDENTITY block prepended above Run Data + Actions grid — shows Unit, Resident, Phone, Email, Telegram (if present), plus "Open chat thread ↗" link. Identity block hidden entirely when all identity fields are null.
+- colSpan updated 12 → 16 throughout.
+
+**Edge cases:** Auto-register runs have NULL sender_profile_id → all identity fields blank, Open Chat disabled. System/internal runs same. Building name resolution unchanged. Filter on identity fields works client-side against the 100-row window already loaded.
+
+**No migration.** Identity is linked via existing FK chain: `ai_pipeline_runs.sender_profile_id → sender_profiles → residents → units`.
+
+**Files:** `app/ai-activity/page.tsx`, `app/api/ai-activity/feed/route.ts`
+
+---
+
 ## §Telegram
 <!-- Telegram bot, groups, Telethon microservice, auto-groups, bot login -->
 
