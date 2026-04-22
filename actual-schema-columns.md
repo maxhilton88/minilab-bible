@@ -1478,7 +1478,7 @@ CHECK: phone IS NOT NULL OR channel_id IS NOT NULL
 |--------|------|----------|---------|-------|
 | id | uuid | NO | gen_random_uuid() | PK |
 | created_at | timestamptz | NO | now() | |
-| building_id | uuid | NO | | FK→buildings ON DELETE CASCADE |
+| building_id | uuid | YES | | FK→buildings ON DELETE CASCADE. NULL = unrouted inbound (phone_number_id not mapped to any building). See D-0851. |
 | message_id | uuid | YES | | FK→messages ON DELETE SET NULL |
 | sender_profile_id | uuid | YES | | FK→sender_profiles ON DELETE SET NULL |
 | resident_id | uuid | YES | | FK→residents ON DELETE SET NULL |

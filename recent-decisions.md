@@ -3303,3 +3303,24 @@ Replaced superadmin session gate on /bibble write routes with shared-password ht
 **Follow-up for Max:** Set `BIBBLE_WRITE_PASSWORD` in Vercel env → redeploy → test unlock flow.
 
 **Note:** Claude Code closing-block writes use `supabaseAdmin` directly — bypass HTTP layer entirely, unaffected by this gate.
+
+---
+
+### D-0851 · 2026-04-22 · B3 — Unknown phone_number_id observability closed
+
+**Change:** `ai_pipeline_runs.building_id` is now nullable (migration 122). The WhatsApp webhook no longer silently exits when `phone_number_id` does not map to any building. Instead it writes an observability row with `skip_reason='unknown_phone_number_id'` and `skip_reason_meta` containing `phone_number_id`, `wa_message_id`, `from`, and `received_at`. Sentry capture is preserved in addition.
+
+`/ai-activity` feed route now returns `building_name: null` (instead of `'Unknown'`) when `building_id` is null. The page renders an amber **UNROUTED** pill for these rows inline — no new feed section, no filter tabs.
+
+**Scope guardrail:** NO new feed section, NO filter tabs, NO per-building partitioning UI today. Deferred to new bibble task `task_ai_activity_building_filter` (V50) — relevant when a second live building (Lumi) comes online.
+
+**Auth note:** Unrouted rows have no building owner — they are visible to superadmin on `/ai-activity` (the page is public by design, per D-0784).
+
+**Why now:** Max explicitly flagged HIGH — "we must see everything, not just registered residents."
+
+**Files changed:**
+- `supabase/migrations/122_ai_pipeline_runs_nullable_building.sql` — ALTER COLUMN building_id DROP NOT NULL
+- `lib/ai/logging/pipeline-run-logger.ts` — PipelineRunCtx.buildingId: string → string | null
+- `app/api/webhooks/whatsapp/route.ts` — silent exit replaced with logPipelineSkip call
+- `app/api/ai-activity/feed/route.ts` — building_name returns null (not 'Unknown') when building_id is null
+- `app/ai-activity/page.tsx` — building_name: string | null; renders UNROUTED amber pill when null
